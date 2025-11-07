@@ -1,0 +1,122 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\gva6397\\source\\repos\\CC.40\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{364A7FE3-B923-40E1-8611-99784AC06226}|ChargingControlSystem.Api\\ChargingControlSystem.Api.csproj|c:\\users\\gva6397\\source\\repos\\cc.40\\chargingcontrolsystem.api\\services\\authservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{364A7FE3-B923-40E1-8611-99784AC06226}|ChargingControlSystem.Api\\ChargingControlSystem.Api.csproj|solutionrelative:chargingcontrolsystem.api\\services\\authservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{7ADE0450-8BAC-448F-AC50-C60D930BEA71}|ChargingControlSystem.Data\\ChargingControlSystem.Data.csproj|c:\\users\\gva6397\\source\\repos\\cc.40\\chargingcontrolsystem.data\\chargingcontrolsystem.data.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
+      "RelativeMoniker": "D:0:0:{7ADE0450-8BAC-448F-AC50-C60D930BEA71}|ChargingControlSystem.Data\\ChargingControlSystem.Data.csproj|solutionrelative:chargingcontrolsystem.data\\chargingcontrolsystem.data.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 17,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:130:0:{13b12e3e-c1b4-4539-9371-4fe9a0d523fc}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:129:0:{13b12e3e-c1b4-4539-9371-4fe9a0d523fc}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:138:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:140:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:141:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:142:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:143:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:144:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:145:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:133:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:134:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:135:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:142:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:138:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:139:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:140:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:129:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "AuthService.cs",
+              "DocumentMoniker": "C:\\Users\\gva6397\\source\\repos\\CC.40\\ChargingControlSystem.Api\\Services\\AuthService.cs",
+              "RelativeDocumentMoniker": "ChargingControlSystem.Api\\Services\\AuthService.cs",
+              "ToolTip": "C:\\Users\\gva6397\\source\\repos\\CC.40\\ChargingControlSystem.Api\\Services\\AuthService.cs*",
+              "RelativeToolTip": "ChargingControlSystem.Api\\Services\\AuthService.cs*",
+              "ViewState": "AgIAAKsAAAAAAAAAAAAqwL0AAAAEAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-10-23T10:03:41.809Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "ChargingControlSystem.Data.csproj",
+              "DocumentMoniker": "C:\\Users\\gva6397\\source\\repos\\CC.40\\ChargingControlSystem.Data\\ChargingControlSystem.Data.csproj",
+              "RelativeDocumentMoniker": "ChargingControlSystem.Data\\ChargingControlSystem.Data.csproj",
+              "ToolTip": "C:\\Users\\gva6397\\source\\repos\\CC.40\\ChargingControlSystem.Data\\ChargingControlSystem.Data.csproj",
+              "RelativeToolTip": "ChargingControlSystem.Data\\ChargingControlSystem.Data.csproj",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2025-10-23T06:08:47.649Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

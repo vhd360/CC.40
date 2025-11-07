@@ -1,0 +1,527 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>ChargingControlSystem.Api</name>
+    </assembly>
+    <members>
+        <member name="T:ChargingControlSystem.Api.Controllers.AuthController">
+            <summary>
+            Authentifizierung und Benutzerverwaltung
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.AuthController.Login(ChargingControlSystem.Api.Models.LoginRequest)">
+            <summary>
+            Benutzer-Login
+            </summary>
+            <param name="request">Login-Daten (Email und Passwort)</param>
+            <returns>JWT Access Token und Refresh Token</returns>
+            <remarks>
+            Beispiel Request:
+            
+                POST /api/auth/login
+                {
+                  "email": "admin@chargingcontrol.com",
+                  "password": "admin123"
+                }
+            
+            Erfolgreiche Response enthält:
+            - **accessToken**: JWT Token für API-Authentifizierung (gültig 24h)
+            - **refreshToken**: Token zum Erneuern des Access Tokens
+            - **user**: Benutzerinformationen (Id, Email, Name, Rolle)
+            
+            **Standard-Benutzer (Seed-Daten):**
+            - Email: `admin@chargingcontrol.com`
+            - Passwort: `admin123`
+            </remarks>
+            <response code="200">Login erfolgreich - JWT Token wird zurückgegeben</response>
+            <response code="400">Ungültige Anmeldedaten oder Benutzer nicht aktiv</response>
+            <response code="401">Email oder Passwort falsch</response>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.AuthController.Register(ChargingControlSystem.Api.Models.RegisterRequest)">
+            <summary>
+            Neuen Benutzer registrieren
+            </summary>
+            <param name="request">Registrierungsdaten</param>
+            <returns>JWT Token für den neuen Benutzer</returns>
+            <remarks>
+            Beispiel Request:
+            
+                POST /api/auth/register
+                {
+                  "email": "user@example.com",
+                  "password": "SecurePassword123!",
+                  "firstName": "Max",
+                  "lastName": "Mustermann",
+                  "tenantId": "11111111-1111-1111-1111-111111111111"
+                }
+            
+            **Passwort-Anforderungen:**
+            - Mindestens 8 Zeichen
+            - Mindestens ein Großbuchstabe
+            - Mindestens eine Zahl
+            
+            Der neue Benutzer wird mit der Rolle **User** angelegt.
+            </remarks>
+            <response code="200">Registrierung erfolgreich</response>
+            <response code="400">Ungültige Daten oder Email bereits vergeben</response>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.AuthController.RefreshToken(System.String)">
+            <summary>
+            Access Token erneuern
+            </summary>
+            <param name="refreshToken">Refresh Token vom Login</param>
+            <returns>Neuer Access Token</returns>
+            <remarks>
+            Verwenden Sie den Refresh Token aus der Login-Response,
+            um einen neuen Access Token zu erhalten, wenn der alte abgelaufen ist.
+            
+            Refresh Tokens sind 7 Tage gültig.
+            </remarks>
+            <response code="200">Token erfolgreich erneuert</response>
+            <response code="401">Ungültiger oder abgelaufener Refresh Token</response>
+        </member>
+        <member name="T:ChargingControlSystem.Api.Controllers.ChargingController">
+            <summary>
+            Ladevorgänge und Sessions
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.ChargingController.GetChargingStations">
+            <summary>
+            Alle verfügbaren Ladesäulen abrufen
+            </summary>
+            <returns>Liste aller aktiven Ladesäulen mit Standort und Status</returns>
+            <remarks>
+            Gibt eine Liste aller Ladesäulen zurück mit:
+            - **Standortdaten**: Latitude, Longitude für Karten-Darstellung
+            - **Status**: Verfügbarkeit der Ladesäule
+            - **Technische Daten**: Leistung, Konnektoren, Typ
+            - **OCPP**: Letzter Heartbeat
+            
+            Wird für die Karten-Ansicht und Station-Auswahl verwendet.
+            </remarks>
+            <response code="200">Liste der Ladesäulen erfolgreich abgerufen</response>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.ChargingController.StartCharging(System.Guid,System.Nullable{System.Guid})">
+            <summary>
+            Ladevorgang starten
+            </summary>
+            <param name="connectorId">ID des Konnektors</param>
+            <param name="vehicleId">ID des Fahrzeugs (optional)</param>
+            <returns>Neue Lade-Session</returns>
+            <remarks>
+            Startet einen neuen Ladevorgang an einem Konnektor.
+            
+            **Voraussetzungen:**
+            - Konnektor muss verfügbar sein (Status: Available)
+            - Benutzer muss berechtigt sein (via User Group Permissions)
+            - Bei OCPP-Stationen wird RemoteStartTransaction gesendet
+            
+            **Response enthält:**
+            - Session-ID für späteren Stop
+            - Startzeitpunkt
+            - Konnektor- und Fahrzeugdaten
+            
+            Die Session wird automatisch beendet, wenn:
+            - Manuell gestoppt via `/api/charging/stop/{sessionId}`
+            - Ladesäule meldet StopTransaction via OCPP
+            - Maximale Session-Dauer erreicht
+            </remarks>
+            <response code="200">Ladevorgang erfolgreich gestartet</response>
+            <response code="400">Konnektor nicht verfügbar oder ungültig</response>
+            <response code="403">Keine Berechtigung für diese Ladesäule</response>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.ChargingController.StopCharging(System.Guid)">
+            <summary>
+            Ladevorgang beenden
+            </summary>
+            <param name="sessionId">ID der Lade-Session</param>
+            <returns>Beendete Session mit Abrechnung</returns>
+            <remarks>
+            Beendet eine laufende Lade-Session.
+            
+            **Aktionen:**
+            - Setzt EndedAt-Zeitstempel
+            - Berechnet Dauer und Energiemenge
+            - Erstellt Abrechnungsdaten (Cost)
+            - Bei OCPP-Stationen: Sendet RemoteStopTransaction
+            
+            **Response enthält:**
+            - Vollständige Session-Daten
+            - Dauer und Energiemenge
+            - Kosten
+            
+            Sessions können auch automatisch durch die Ladesäule
+            (via OCPP StopTransaction) beendet werden.
+            </remarks>
+            <response code="200">Ladevorgang erfolgreich beendet</response>
+            <response code="404">Session nicht gefunden</response>
+            <response code="400">Session bereits beendet</response>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.ChargingController.GetChargingSessions">
+            <summary>
+            Lade-Sessions abrufen
+            </summary>
+            <returns>Liste aller Lade-Sessions des aktuellen Benutzers</returns>
+            <remarks>
+            Gibt die Lade-History des Benutzers zurück.
+            
+            **Enthaltene Daten:**
+            - Benutzer- und Fahrzeugdaten
+            - Ladesäule und Konnektor
+            - Start- und Endzeitpunkt
+            - Dauer und Status
+            - Kosten
+            
+            **Session-Status:**
+            - `Charging`: Ladevorgang läuft aktuell
+            - `Completed`: Ladevorgang erfolgreich beendet
+            - `Failed`: Ladevorgang mit Fehler beendet
+            - `Cancelled`: Ladevorgang abgebrochen
+            
+            Sessions werden absteigend nach Startzeit sortiert.
+            </remarks>
+            <response code="200">Sessions erfolgreich abgerufen</response>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.ChargingController.GetActiveSessions">
+            <summary>
+            Aktive Sessions des aktuellen Benutzers abrufen
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.ChargingController.GetStationConnectors(System.Guid)">
+            <summary>
+            Verfügbare Connectoren für eine Station abrufen
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.ChargingController.ResetConnectorStatus(System.Guid)">
+            <summary>
+            Connector-Status zurücksetzen (Admin)
+            </summary>
+        </member>
+        <member name="T:ChargingControlSystem.Api.Controllers.ChargingStationsController">
+            <summary>
+            Ladesäulen-Verwaltung
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.ChargingStationsController.GetAll">
+            <summary>
+            Alle Ladesäulen abrufen
+            </summary>
+            <returns>Liste aller Ladesäulen des aktuellen Tenants</returns>
+            <remarks>
+            Gibt eine vollständige Liste aller aktiven Ladesäulen zurück, inklusive:
+            - **Grunddaten**: Name, Status, Typ, Hersteller, Modell
+            - **Leistungsdaten**: Maximale Leistung, Anzahl Konnektoren
+            - **OCPP**: ChargeBoxId, Protokoll, letzter Heartbeat
+            - **Gruppen**: Zugehörige Ladesäulen-Gruppen
+            - **Standort**: Zugeordneter Ladepark
+            
+            Die Daten werden automatisch nach dem Tenant des eingeloggten Benutzers gefiltert.
+            </remarks>
+            <response code="200">Liste der Ladesäulen erfolgreich abgerufen</response>
+            <response code="400">Tenant nicht gefunden</response>
+            <response code="401">Nicht autorisiert</response>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.ChargingStationsController.GetById(System.Guid)">
+            <summary>
+            Ladesäule nach ID abrufen
+            </summary>
+            <param name="id">Eindeutige ID der Ladesäule</param>
+            <returns>Detaillierte Informationen zur Ladesäule</returns>
+            <remarks>
+            Gibt detaillierte Informationen zu einer Ladesäule zurück, inklusive:
+            - **Vollständige Stammdaten**
+            - **OCPP-Konfiguration**: ChargeBoxId, Passwort, Endpoint, Protokoll
+            - **Hierarchie**: Ladepunkte (EVSEs) mit ihren Konnektoren
+            - **Gruppen**: Alle zugeordneten Ladesäulen-Gruppen
+            - **Geo-Daten**: Latitude, Longitude
+            
+            Wird für die Detailansicht und Bearbeitung verwendet.
+            </remarks>
+            <response code="200">Ladesäule gefunden</response>
+            <response code="400">Tenant nicht gefunden</response>
+            <response code="404">Ladesäule nicht gefunden</response>
+            <response code="401">Nicht autorisiert</response>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.PermissionsController.GetAll">
+            <summary>
+            Alle verfügbaren Berechtigungen abrufen
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.PermissionsController.GetByUserGroup(System.Guid)">
+            <summary>
+            Berechtigungen für eine UserGroup abrufen
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.PermissionsController.AddPermissionToGroup(System.Guid,System.Guid)">
+            <summary>
+            Berechtigung zu UserGroup hinzufügen
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.PermissionsController.RemovePermissionFromGroup(System.Guid,System.Guid)">
+            <summary>
+            Berechtigung von UserGroup entfernen
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.PermissionsController.SetGroupPermissions(System.Guid,ChargingControlSystem.Api.Controllers.SetPermissionsRequest)">
+            <summary>
+            Alle Berechtigungen einer UserGroup auf einmal setzen
+            </summary>
+        </member>
+        <member name="T:ChargingControlSystem.Api.Models.LoginRequest">
+            <summary>
+            Login-Anfrage für Benutzer-Authentifizierung
+            </summary>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.LoginRequest.Email">
+            <summary>
+            E-Mail-Adresse des Benutzers
+            </summary>
+            <example>admin@chargingcontrol.com</example>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.LoginRequest.Password">
+            <summary>
+            Passwort des Benutzers
+            </summary>
+            <example>admin123</example>
+        </member>
+        <member name="T:ChargingControlSystem.Api.Models.RegisterRequest">
+            <summary>
+            Registrierungs-Anfrage für neue Benutzer
+            </summary>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.RegisterRequest.FirstName">
+            <summary>
+            Vorname des Benutzers
+            </summary>
+            <example>Max</example>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.RegisterRequest.LastName">
+            <summary>
+            Nachname des Benutzers
+            </summary>
+            <example>Mustermann</example>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.RegisterRequest.Email">
+            <summary>
+            E-Mail-Adresse (wird als Login verwendet)
+            </summary>
+            <example>max.mustermann@example.com</example>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.RegisterRequest.Password">
+            <summary>
+            Passwort (min. 8 Zeichen, 1 Großbuchstabe, 1 Zahl)
+            </summary>
+            <example>SecurePassword123!</example>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.RegisterRequest.PhoneNumber">
+            <summary>
+            Telefonnummer (optional)
+            </summary>
+            <example>+49 123 456789</example>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.RegisterRequest.InviteToken">
+            <summary>
+            Einladungs-Token für QR-Code-Registrierung (optional)
+            </summary>
+            <example>abc123def456</example>
+        </member>
+        <member name="T:ChargingControlSystem.Api.Models.AuthResponse">
+            <summary>
+            Authentifizierungs-Antwort mit JWT Token
+            </summary>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.AuthResponse.Success">
+            <summary>
+            Erfolgs-Status der Authentifizierung
+            </summary>
+            <example>true</example>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.AuthResponse.Token">
+            <summary>
+            JWT Access Token (gültig 24h)
+            </summary>
+            <example>eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...</example>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.AuthResponse.RefreshToken">
+            <summary>
+            Refresh Token zum Erneuern des Access Tokens (gültig 7 Tage)
+            </summary>
+            <example>abc123def456ghi789...</example>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.AuthResponse.ExpiresAt">
+            <summary>
+            Ablaufzeitpunkt des Access Tokens
+            </summary>
+            <example>2025-10-24T15:00:00Z</example>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.AuthResponse.Message">
+            <summary>
+            Fehlermeldung bei erfolgloser Authentifizierung
+            </summary>
+            <example>Ungültige Anmeldedaten</example>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.AuthResponse.User">
+            <summary>
+            Benutzer-Informationen
+            </summary>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.AuthResponse.JoinedGroupId">
+            <summary>
+            ID der Gruppe, der der Benutzer beigetreten ist (bei Einladungs-Registrierung)
+            </summary>
+            <example>22222222-2222-2222-2222-222222222222</example>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.AuthResponse.JoinedGroupName">
+            <summary>
+            Name der Gruppe, der der Benutzer beigetreten ist
+            </summary>
+            <example>Mitarbeiter Gruppe</example>
+        </member>
+        <member name="T:ChargingControlSystem.Api.Models.UserDto">
+            <summary>
+            Benutzer-Datenmodell
+            </summary>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.UserDto.Id">
+            <summary>
+            Eindeutige Benutzer-ID
+            </summary>
+            <example>388d8e09-5156-4ffd-8ee7-4207eec43c6d</example>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.UserDto.TenantId">
+            <summary>
+            Tenant-ID des Benutzers
+            </summary>
+            <example>11111111-1111-1111-1111-111111111111</example>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.UserDto.TenantName">
+            <summary>
+            Name des Tenants
+            </summary>
+            <example>ChargingControl Demo</example>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.UserDto.TenantLogoUrl">
+            <summary>
+            Logo-URL des Tenants
+            </summary>
+            <example>/uploads/tenants/11111111-1111-1111-1111-111111111111/logo.png</example>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.UserDto.TenantTheme">
+            <summary>
+            Farbschema des Tenants (0=Blue, 1=Green, 2=Red, 3=Purple)
+            </summary>
+            <example>0</example>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.UserDto.FirstName">
+            <summary>
+            Vorname des Benutzers
+            </summary>
+            <example>Max</example>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.UserDto.LastName">
+            <summary>
+            Nachname des Benutzers
+            </summary>
+            <example>Mustermann</example>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.UserDto.Email">
+            <summary>
+            E-Mail-Adresse
+            </summary>
+            <example>max.mustermann@example.com</example>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.UserDto.Role">
+            <summary>
+            Benutzer-Rolle (Admin, Manager, User)
+            </summary>
+            <example>User</example>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.UserDto.IsActive">
+            <summary>
+            Aktiv-Status des Benutzers
+            </summary>
+            <example>true</example>
+        </member>
+        <member name="P:ChargingControlSystem.Api.Models.UserDto.CreatedAt">
+            <summary>
+            Erstellungsdatum (UTC)
+            </summary>
+            <example>2025-10-01T10:00:00Z</example>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Services.IBillingService.CreateTransactionForSessionAsync(ChargingControlSystem.Data.Entities.ChargingSession)">
+            <summary>
+            Erstellt automatisch eine BillingTransaction für eine abgeschlossene ChargingSession
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Services.IBillingService.GetOrCreateBillingAccountAsync(System.Guid,System.Guid)">
+            <summary>
+            Holt oder erstellt ein BillingAccount für einen User
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Services.IBillingService.GetTransactionsForUserAsync(System.Guid)">
+            <summary>
+            Holt alle Transaktionen für einen User
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Services.IBillingService.GetTransactionsForTenantAsync(System.Guid,System.Nullable{System.DateTime},System.Nullable{System.DateTime},System.Nullable{ChargingControlSystem.Data.Entities.BillingTransactionStatus})">
+            <summary>
+            Holt alle Transaktionen für einen Tenant (mit Filterung)
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Services.IBillingService.CalculateTotalCostAsync(System.Guid,System.Nullable{System.DateTime},System.Nullable{System.DateTime})">
+            <summary>
+            Berechnet die Gesamtkosten für einen User in einem Zeitraum
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Services.IBillingService.MarkTransactionAsPaidAsync(System.Guid)">
+            <summary>
+            Markiert eine Transaktion als bezahlt
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Services.IBillingService.RefundTransactionAsync(System.Guid,System.String)">
+            <summary>
+            Storniert eine Transaktion
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Services.INotificationService.NotifyStationStatusChangedAsync(System.Guid,System.Guid,System.String,System.String)">
+            <summary>
+            Notify all clients in a tenant about a station status change
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Services.INotificationService.NotifyConnectorStatusChangedAsync(System.Guid,System.Guid,System.String,System.String)">
+            <summary>
+            Notify all clients in a tenant about a connector status change
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Services.INotificationService.NotifySessionUpdateAsync(System.Guid,System.Guid,System.String,System.String)">
+            <summary>
+            Notify a specific user about a session update
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Services.INotificationService.NotifyNewTransactionAsync(System.Guid,System.Guid)">
+            <summary>
+            Notify all clients in a tenant about a new billing transaction
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Services.ITariffService.CalculateCostAsync(System.Guid,System.Guid,System.DateTime,System.DateTime,System.Decimal)">
+            <summary>
+            Calculate cost for a charging session based on user's tariff
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Services.ITariffService.CalculateCostAsync(ChargingControlSystem.Data.Entities.ChargingSession)">
+            <summary>
+            Calculate cost for a charging session (mit ChargingCompletedAt für korrekte Standzeit-Berechnung)
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Services.ITariffService.GetApplicableTariffAsync(System.Guid,System.Guid)">
+            <summary>
+            Get applicable tariff for a user at a specific charging station
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Services.ITariffService.GetDefaultTariffAsync(System.Guid)">
+            <summary>
+            Get default tariff for a tenant
+            </summary>
+        </member>
+    </members>
+</doc>

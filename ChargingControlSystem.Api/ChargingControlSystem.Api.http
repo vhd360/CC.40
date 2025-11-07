@@ -1,0 +1,6 @@
+@ChargingControlSystem.Api_HostAddress = http://localhost:5126
+
+GET {{ChargingControlSystem.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
