@@ -29,7 +29,7 @@ public class OcppWebSocketServer
     public OcppWebSocketServer(
         IServiceProvider serviceProvider,
         ILogger<OcppWebSocketServer> logger,
-        string prefix = "http://localhost:9000/ocpp/")
+        string prefix = "http://192.168.178.121:9000/ocpp/")
     {
         _logger = logger;
         _serviceProvider = serviceProvider;

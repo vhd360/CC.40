@@ -191,6 +191,13 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<ChargingStation>()
             .Property(s => s.Longitude).HasPrecision(11, 8);
 
+        // Private ChargingStation - Owner relationship
+        modelBuilder.Entity<ChargingStation>()
+            .HasOne(cs => cs.Owner)
+            .WithMany(u => u.OwnedChargingStations)
+            .HasForeignKey(cs => cs.OwnerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         // ChargingStationGroups
         modelBuilder.Entity<ChargingStationGroupMembership>()
             .HasOne(m => m.ChargingStationGroup)

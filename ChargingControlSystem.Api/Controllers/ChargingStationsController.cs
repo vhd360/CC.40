@@ -59,7 +59,7 @@ public class ChargingStationsController : ControllerBase
 
         var stations = await _context.ChargingStations
             .Include(s => s.ChargingPark)
-            .Where(s => s.ChargingPark.TenantId == tenantId.Value && s.IsActive)
+            .Where(s => !s.IsPrivate && s.ChargingPark.TenantId == tenantId.Value && s.IsActive)
             .Select(s => new
             {
                 s.Id,
@@ -134,7 +134,7 @@ public class ChargingStationsController : ControllerBase
             .Include(s => s.ChargingPark)
             .Include(s => s.ChargingPoints)
                 .ThenInclude(cp => cp.Connectors)
-            .Where(s => s.Id == id && s.ChargingPark.TenantId == tenantId.Value)
+            .Where(s => s.Id == id && !s.IsPrivate && s.ChargingPark.TenantId == tenantId.Value)
             .Select(s => new
             {
                 s.Id,
@@ -256,6 +256,10 @@ public class ChargingStationsController : ControllerBase
         if (station == null)
             return NotFound();
 
+        // Private stations can only be updated via UserPortalController
+        if (station.IsPrivate)
+            return BadRequest("Private charging stations cannot be updated through this endpoint");
+
         station.StationId = dto.StationId;
         station.Name = dto.Name;
         station.Vendor = dto.Vendor;
@@ -284,6 +288,10 @@ public class ChargingStationsController : ControllerBase
         var station = await _context.ChargingStations.FindAsync(id);
         if (station == null)
             return NotFound();
+
+        // Private stations can only be deleted via UserPortalController
+        if (station.IsPrivate)
+            return BadRequest("Private charging stations cannot be deleted through this endpoint");
 
         station.IsActive = false; // Soft delete
         await _context.SaveChangesAsync();

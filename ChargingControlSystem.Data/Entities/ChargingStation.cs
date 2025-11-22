@@ -8,8 +8,15 @@ public class ChargingStation
     [Key]
     public Guid Id { get; set; }
 
+    // ChargingParkId ist optional für private Stationen
+    public Guid? ChargingParkId { get; set; }
+
+    // Private Station Flag
     [Required]
-    public Guid ChargingParkId { get; set; }
+    public bool IsPrivate { get; set; } = false;
+
+    // Owner für private Stationen
+    public Guid? OwnerId { get; set; }
 
     [Required]
     [MaxLength(50)]
@@ -68,7 +75,8 @@ public class ChargingStation
     public DateTime? LastHeartbeat { get; set; }
 
     // Navigation properties
-    public virtual ChargingPark ChargingPark { get; set; } = null!;
+    public virtual ChargingPark? ChargingPark { get; set; }
+    public virtual User? Owner { get; set; }
     public virtual ICollection<ChargingPoint> ChargingPoints { get; set; } = new List<ChargingPoint>();
 }
 

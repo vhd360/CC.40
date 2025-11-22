@@ -55,4 +55,5 @@ public class User
     public virtual ICollection<ChargingSession> ChargingSessions { get; set; } = new List<ChargingSession>();
     public virtual ICollection<QrCode> QrCodes { get; set; } = new List<QrCode>();
     public virtual ICollection<AuthorizationMethod> AuthorizationMethods { get; set; } = new List<AuthorizationMethod>();
+    public virtual ICollection<ChargingStation> OwnedChargingStations { get; set; } = new List<ChargingStation>();
 }
