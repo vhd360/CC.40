@@ -46,6 +46,9 @@ services:
         condition: service_healthy
     networks:
       - cubos-network
+    command: >
+      sh -c "dotnet ef database update --project ChargingControlSystem.Data --startup-project ChargingControlSystem.Api && 
+             dotnet watch run --project ChargingControlSystem.Api --no-launch-profile"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:80/health"]
