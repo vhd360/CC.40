@@ -407,6 +407,7 @@ FodyWeavers.xsd
 *.db-wal
 
 # Environment files with secrets (keep templates)
+appsettings.json
 appsettings.Production.json
 appsettings.Staging.json
 *.secrets.json
