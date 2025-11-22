@@ -269,7 +269,11 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Middleware - WICHTIG: Reihenfolge beachten!
-app.UseHttpsRedirection();
+// HTTPS-Umleitung nur in Production
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 // Static Files für Logo-Uploads
 app.UseStaticFiles();
