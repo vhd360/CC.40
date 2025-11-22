@@ -218,7 +218,12 @@ builder.Services.AddSingleton<IDbContextFactory<ApplicationDbContext>>(sp =>
     return new SimpleDbContextFactory(connectionString);
 });
 builder.Services.AddTransient<ChargingControlSystem.OCPP.Handlers.IOcppMessageHandler, ChargingControlSystem.OCPP.Handlers.OcppMessageHandler>();
-builder.Services.AddSingleton<ChargingControlSystem.OCPP.Server.OcppWebSocketServer>();
+builder.Services.AddSingleton<ChargingControlSystem.OCPP.Server.OcppWebSocketServer>(sp =>
+{
+    var logger = sp.GetRequiredService<ILogger<ChargingControlSystem.OCPP.Server.OcppWebSocketServer>>();
+    var ocppUrl = builder.Configuration["Ocpp:ServerUrl"] ?? "http://localhost:9000/ocpp/";
+    return new ChargingControlSystem.OCPP.Server.OcppWebSocketServer(sp, logger, ocppUrl);
+});
 builder.Services.AddHostedService<ChargingControlSystem.OCPP.Services.OcppHostedService>();
 builder.Services.AddScoped<IBillingService, BillingService>();
 builder.Services.AddScoped<IInvoicePdfService, InvoicePdfService>();
