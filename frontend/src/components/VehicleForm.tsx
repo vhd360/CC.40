@@ -18,6 +18,8 @@ export interface VehicleFormData {
   type: string;
   color: string;
   notes?: string;
+  rfidTag?: string;
+  qrCode?: string;
 }
 
 export const VehicleForm: React.FC<VehicleFormProps> = ({ vehicle, onSubmit, onCancel }) => {
@@ -28,7 +30,9 @@ export const VehicleForm: React.FC<VehicleFormProps> = ({ vehicle, onSubmit, onC
     year: vehicle?.year || new Date().getFullYear(),
     type: vehicle?.type || 'PoolVehicle',
     color: vehicle?.color || '',
-    notes: vehicle?.notes || ''
+    notes: vehicle?.notes || '',
+    rfidTag: vehicle?.rfidTag || '',
+    qrCode: vehicle?.qrCode || ''
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -119,13 +123,48 @@ export const VehicleForm: React.FC<VehicleFormProps> = ({ vehicle, onSubmit, onC
             </div>
           </div>
 
+          <div className="space-y-4 border-t pt-4 mt-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Identifikationsmethoden</h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Fügen Sie RFID-Tags oder QR-Codes hinzu, damit das Fahrzeug automatisch erkannt werden kann
+            </p>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="rfidTag">RFID-Tag</Label>
+                <Input
+                  id="rfidTag"
+                  value={formData.rfidTag}
+                  onChange={(e) => setFormData({ ...formData, rfidTag: e.target.value })}
+                  placeholder="z.B. VEHICLE-001"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Für automatische Fahrzeugerkennung beim Laden
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="qrCode">QR-Code</Label>
+                <Input
+                  id="qrCode"
+                  value={formData.qrCode}
+                  onChange={(e) => setFormData({ ...formData, qrCode: e.target.value })}
+                  placeholder="z.B. QR-VEHICLE-001"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Alternative Identifikationsmethode
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="notes">Notizen</Label>
             <textarea
               id="notes"
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              className="w-full min-h-[100px] rounded-md border border-input bg-background px-3 py-2"
+              className="w-full min-h-[100px] rounded-md border border-input bg-background px-3 py-2 dark:bg-gray-800 dark:text-gray-100"
               placeholder="Zusätzliche Informationen..."
             />
           </div>

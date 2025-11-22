@@ -6,9 +6,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { Loader2, MapPin, Zap, Battery, Building2, Navigation, Play, AlertCircle, CheckCircle } from 'lucide-react';
+import { Loader2, MapPin, Zap, Battery, Building2, Navigation, Play, AlertCircle, CheckCircle, Camera, QrCode } from 'lucide-react';
 import { api } from '../services/api';
 import { useSignalRContext } from '../contexts/SignalRContext';
+import { QRScanner } from '../components/QRScanner';
 
 export const UserStations: React.FC = () => {
   const { isConnected, onStationStatusChanged, onConnectorStatusChanged } = useSignalRContext();
@@ -23,6 +24,8 @@ export const UserStations: React.FC = () => {
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [showQRScanner, setShowQRScanner] = useState(false);
+  const [scannedVehicle, setScannedVehicle] = useState<any | null>(null);
 
   useEffect(() => {
     loadStations();
@@ -101,8 +104,38 @@ export const UserStations: React.FC = () => {
       setShowStartDialog(true);
       setSelectedConnector('');
       setSelectedVehicle('');
+      setShowQRScanner(false);
+      setScannedVehicle(null);
     } catch (err: any) {
       setError(err.message || 'Fehler beim Laden der Connectoren');
+    }
+  };
+
+  const handleQRScan = async (qrData: string) => {
+    console.log('QR-Code gescannt:', qrData);
+    setShowQRScanner(false);
+    
+    try {
+      // Versuche Fahrzeug anhand QR-Code zu finden
+      const vehicles = await api.getVehicles();
+      const foundVehicle = vehicles.find(v => 
+        v.qrCode === qrData || 
+        `VEHICLE-${v.id}` === qrData ||
+        v.id === qrData
+      );
+      
+      if (foundVehicle) {
+        setScannedVehicle(foundVehicle);
+        setSelectedVehicle(foundVehicle.id);
+        setSuccess(`✅ Fahrzeug erkannt: ${foundVehicle.make} ${foundVehicle.model} (${foundVehicle.licensePlate})`);
+        setTimeout(() => setSuccess(null), 5000);
+      } else {
+        setError('Fahrzeug nicht gefunden. Bitte manuell auswählen.');
+        setTimeout(() => setError(null), 5000);
+      }
+    } catch (err: any) {
+      setError('Fehler beim Suchen des Fahrzeugs');
+      setTimeout(() => setError(null), 5000);
     }
   };
 
@@ -118,6 +151,7 @@ export const UserStations: React.FC = () => {
       await api.startChargingSession(selectedConnector, selectedVehicle || undefined);
       setSuccess(`Ladevorgang erfolgreich gestartet an ${selectedStation?.name}`);
       setShowStartDialog(false);
+      setScannedVehicle(null);
       setTimeout(() => {
         setSuccess(null);
       }, 5000);
@@ -340,15 +374,38 @@ export const UserStations: React.FC = () => {
               </Select>
             </div>
 
-            {myVehicles.length > 0 && (
+            {myVehicles.length > 0 && !showQRScanner && (
               <div className="space-y-2">
-                <Label htmlFor="vehicle">Fahrzeug (optional)</Label>
-                <Select value={selectedVehicle} onValueChange={setSelectedVehicle}>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="vehicle">Fahrzeug (optional)</Label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowQRScanner(true)}
+                    className="text-xs"
+                  >
+                    <QrCode className="h-3 w-3 mr-1" />
+                    QR-Code scannen
+                  </Button>
+                </div>
+                
+                {scannedVehicle && (
+                  <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-3 mb-2">
+                    <p className="text-sm font-medium text-green-900 dark:text-green-100">
+                      ✅ Fahrzeug gescannt:
+                    </p>
+                    <p className="text-sm text-green-700 dark:text-green-300">
+                      {scannedVehicle.make} {scannedVehicle.model} ({scannedVehicle.licensePlate})
+                    </p>
+                  </div>
+                )}
+                
+                <Select value={selectedVehicle || undefined} onValueChange={(value: string) => setSelectedVehicle(value === 'none' ? '' : value)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Kein Fahrzeug auswählen" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Kein Fahrzeug</SelectItem>
+                    <SelectItem value="none">Kein Fahrzeug</SelectItem>
                     {myVehicles.map((assignment) => (
                       <SelectItem key={assignment.vehicle.id} value={assignment.vehicle.id}>
                         {assignment.vehicle.make} {assignment.vehicle.model} ({assignment.vehicle.licensePlate})
@@ -359,6 +416,16 @@ export const UserStations: React.FC = () => {
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   Wählen Sie ein Fahrzeug für eine korrekte Kostenzuordnung
                 </p>
+              </div>
+            )}
+
+            {showQRScanner && (
+              <div className="space-y-2">
+                <Label>QR-Code am Fahrzeug scannen</Label>
+                <QRScanner
+                  onScan={handleQRScan}
+                  onClose={() => setShowQRScanner(false)}
+                />
               </div>
             )}
 

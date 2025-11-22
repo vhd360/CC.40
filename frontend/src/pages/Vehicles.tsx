@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { Car, Plus, Loader2, Edit, Trash2 } from 'lucide-react';
+import { Car, Plus, Loader2, Edit, Trash2, QrCode } from 'lucide-react';
 import { api, Vehicle } from '../services/api';
 import { VehicleForm, VehicleFormData } from '../components/VehicleForm';
+import { VehicleQRCodeDialog } from '../components/VehicleQRCodeDialog';
 
 export const Vehicles: React.FC = () => {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
+  const [qrCodeVehicle, setQrCodeVehicle] = useState<Vehicle | null>(null);
+  const [showQRDialog, setShowQRDialog] = useState(false);
 
   const loadVehicles = async () => {
     try {
@@ -74,6 +77,11 @@ export const Vehicles: React.FC = () => {
     setEditingVehicle(null);
   };
 
+  const handleShowQRCode = (vehicle: Vehicle) => {
+    setQrCodeVehicle(vehicle);
+    setShowQRDialog(true);
+  };
+
   if (showForm) {
     return (
       <div className="space-y-6">
@@ -95,8 +103,8 @@ export const Vehicles: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Fahrzeuge</h1>
-          <p className="text-gray-600 mt-1">Verwalten Sie Poolfahrzeuge und Dienstwagen</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Fahrzeuge</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">Verwalten Sie Poolfahrzeuge und Dienstwagen</p>
         </div>
         <Button onClick={() => setShowForm(true)} className="flex items-center space-x-2">
           <Plus className="h-4 w-4" />
@@ -125,47 +133,58 @@ export const Vehicles: React.FC = () => {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <span className="text-sm text-gray-600">Baujahr</span>
-                    <div className="font-medium">{vehicle.year}</div>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Baujahr</span>
+                    <div className="font-medium text-gray-900 dark:text-gray-100">{vehicle.year}</div>
                   </div>
                   <div>
-                    <span className="text-sm text-gray-600">Farbe</span>
-                    <div className="font-medium">{vehicle.color}</div>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Farbe</span>
+                    <div className="font-medium text-gray-900 dark:text-gray-100">{vehicle.color}</div>
                   </div>
                 </div>
 
                 <div>
-                  <span className="text-sm text-gray-600">Typ</span>
-                  <div className="font-medium">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Typ</span>
+                  <div className="font-medium text-gray-900 dark:text-gray-100">
                     {vehicle.type === 'PoolVehicle' ? 'Poolfahrzeug' : 'Dienstwagen'}
                   </div>
                 </div>
 
                 {vehicle.notes && (
                   <div>
-                    <span className="text-sm text-gray-600">Notizen</span>
-                    <div className="text-sm text-gray-700 mt-1">{vehicle.notes}</div>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Notizen</span>
+                    <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">{vehicle.notes}</div>
                   </div>
                 )}
 
-                <div className="flex space-x-2">
+                <div className="flex flex-col space-y-2">
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    className="flex-1"
-                    onClick={() => handleEdit(vehicle)}
+                    className="w-full bg-blue-50 hover:bg-blue-100 dark:bg-blue-950 dark:hover:bg-blue-900 border-blue-200 dark:border-blue-800"
+                    onClick={() => handleShowQRCode(vehicle)}
                   >
-                    <Edit className="h-4 w-4 mr-1" />
-                    Bearbeiten
+                    <QrCode className="h-4 w-4 mr-2" />
+                    QR-Code anzeigen
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => handleDelete(vehicle.id)}
-                    className="text-red-600 hover:text-red-700"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <div className="flex space-x-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex-1"
+                      onClick={() => handleEdit(vehicle)}
+                    >
+                      <Edit className="h-4 w-4 mr-1" />
+                      Bearbeiten
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleDelete(vehicle.id)}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -184,6 +203,13 @@ export const Vehicles: React.FC = () => {
           </CardContent>
         </Card>
       )}
+
+      {/* QR-Code Dialog */}
+      <VehicleQRCodeDialog
+        open={showQRDialog}
+        onOpenChange={setShowQRDialog}
+        vehicle={qrCodeVehicle}
+      />
     </div>
   );
 };

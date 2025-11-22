@@ -45,6 +45,8 @@ export interface Vehicle {
   type: string;
   color: string;
   notes?: string;
+  rfidTag?: string;
+  qrCode?: string;
   isActive: boolean;
   createdAt: string;
 }
@@ -265,6 +267,8 @@ export interface VehicleAssignment {
     year?: number;
     color?: string;
     type: string;
+    rfidTag?: string;
+    qrCode?: string;
   };
   userId: string;
   user: {

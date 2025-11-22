@@ -1,0 +1,51 @@
+# Debug Dockerfile - Schritt-für-Schritt Build für Troubleshooting
+FROM node:20-alpine
+WORKDIR /app
+
+# Install debugging tools
+RUN apk add --no-cache curl git
+
+# Copy package files
+COPY package*.json ./
+
+# Show what we have
+RUN echo "=== package.json ===" && \
+    cat package.json && \
+    echo -e "\n=== package-lock.json (first 20 lines) ===" && \
+    head -20 package-lock.json && \
+    echo -e "\n=== Node version ===" && \
+    node --version && \
+    echo -e "\n=== NPM version ===" && \
+    npm --version
+
+# Try to install with different approaches
+RUN echo "=== Attempt 1: npm ci with verbose ===" && \
+    npm cache clean --force && \
+    npm ci --verbose --no-fund --no-audit || \
+    (echo "=== Attempt 1 failed, trying with legacy-peer-deps ===" && \
+     npm ci --verbose --legacy-peer-deps --no-fund --no-audit) || \
+    (echo "=== Attempt 2 failed, trying npm install ===" && \
+     rm -rf node_modules package-lock.json && \
+     npm install --verbose --no-fund --no-audit)
+
+# Verify installation
+RUN echo "=== Checking node_modules ===" && \
+    ls -la node_modules/ | head -10 && \
+    echo "=== Checking if react-scripts exists ===" && \
+    ls -la node_modules/.bin/react-scripts
+
+# Copy source and build
+COPY . .
+RUN echo "=== Building app ===" && \
+    npm run build && \
+    echo "=== Build successful! ===" && \
+    ls -la build/
+
+# Run nginx for testing
+FROM nginx:alpine
+COPY --from=0 /app/build /usr/share/nginx/html
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+
+
+

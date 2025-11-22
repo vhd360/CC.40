@@ -17,7 +17,8 @@ import {
   Settings,
   Menu,
   X,
-  DollarSign
+  DollarSign,
+  UserCog
 } from 'lucide-react';
 import { applyTheme, TenantTheme } from '../themes/tenantThemes';
 
@@ -32,7 +33,7 @@ const navigation = [
   { name: 'Nutzergruppen', href: '/user-groups', icon: UsersRound },
   { name: 'Identifikationsmethoden', href: '/authorization-methods', icon: Key },
   { name: 'Fahrzeuge', href: '/vehicles', icon: Car },
-  { name: 'Fahrzeugzuweisungen', href: '/vehicle-assignments', icon: Key },
+  { name: 'Fahrzeugzuweisungen', href: '/vehicle-assignments', icon: UserCog },
   { name: 'Tarife', href: '/tariffs', icon: DollarSign },
   { name: 'Abrechnung', href: '/billing', icon: CreditCard },
   { name: 'QR-Codes', href: '/qrcodes', icon: QrCode },

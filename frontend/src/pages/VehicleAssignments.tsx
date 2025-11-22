@@ -38,17 +38,23 @@ export function VehicleAssignments() {
     try {
       setLoading(true);
       setError(null);
+      console.log('🔄 Loading vehicle assignments data...');
       const [assignmentsData, vehiclesData, usersData] = await Promise.all([
         api.getVehicleAssignments(includeReturned),
         api.getVehicles(),
         api.getUsers()
       ]);
+      console.log('✅ Data loaded:', { 
+        assignments: assignmentsData.length, 
+        vehicles: vehiclesData.length, 
+        users: usersData.length 
+      });
       setAssignments(assignmentsData);
       setVehicles(vehiclesData.filter(v => v.isActive));
       setUsers(usersData);
     } catch (err) {
-      setError('Fehler beim Laden der Daten');
-      console.error(err);
+      console.error('❌ Error loading data:', err);
+      setError('Fehler beim Laden der Daten: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
       setLoading(false);
     }
@@ -140,21 +146,25 @@ export function VehicleAssignments() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Fahrzeugzuweisungen</h1>
           <p className="text-gray-600 dark:text-gray-400 mt-2">
             Verwalten Sie Dienstwagen und Poolfahrzeuge
           </p>
         </div>
-        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Fahrzeug zuweisen
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
+        <Button 
+          className="whitespace-nowrap bg-primary hover:bg-primary/90"
+          onClick={() => setShowCreateDialog(true)}
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Fahrzeug zuweisen
+        </Button>
+      </div>
+
+      {/* Dialog für neue Zuweisung */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle>Fahrzeug zuweisen</DialogTitle>
               <DialogDescription>
@@ -242,9 +252,8 @@ export function VehicleAssignments() {
                 Zuweisen
               </Button>
             </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
+        </DialogContent>
+      </Dialog>
 
       {error && (
         <Alert variant="destructive">

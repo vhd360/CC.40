@@ -36,6 +36,18 @@ public class Vehicle
     [MaxLength(500)]
     public string? Notes { get; set; }
 
+    /// <summary>
+    /// RFID-Tag für Fahrzeugidentifikation (z.B. für automatische Zuordnung bei Ladevorgängen)
+    /// </summary>
+    [MaxLength(100)]
+    public string? RfidTag { get; set; }
+
+    /// <summary>
+    /// QR-Code für Fahrzeugidentifikation
+    /// </summary>
+    [MaxLength(100)]
+    public string? QrCode { get; set; }
+
     [Required]
     public bool IsActive { get; set; } = true;
 

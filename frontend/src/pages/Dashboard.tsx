@@ -160,8 +160,8 @@ export const Dashboard: React.FC = () => {
       {/* Page Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600 mt-1">Business-Übersicht und Umsatz-Kennzahlen</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Dashboard</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">Business-Übersicht und Umsatz-Kennzahlen</p>
         </div>
         <Button onClick={refreshData} className="flex items-center space-x-2">
           <RefreshCw className="h-4 w-4" />
@@ -174,16 +174,16 @@ export const Dashboard: React.FC = () => {
         {statsCards.map((stat) => (
           <Card key={stat.title} className="hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
+              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
                 {stat.title}
               </CardTitle>
-              <div className={`w-10 h-10 ${stat.bgColor} rounded-lg flex items-center justify-center`}>
+              <div className={`w-10 h-10 ${stat.bgColor} dark:bg-opacity-20 rounded-lg flex items-center justify-center`}>
                 <stat.icon className={`h-5 w-5 ${stat.color}`} />
               </div>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-              <p className="text-xs text-gray-500 mt-1">
+              <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{stat.value}</div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 {stat.subtitle}
               </p>
             </CardContent>
@@ -269,31 +269,31 @@ export const Dashboard: React.FC = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
+            <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950 dark:to-emerald-950 rounded-lg border border-green-200 dark:border-green-800">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700">Umsatz</span>
-                <TrendingUp className="h-4 w-4 text-green-600" />
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Umsatz</span>
+                <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
               </div>
-              <div className="text-2xl font-bold text-gray-900">€ 24,567</div>
-              <div className="text-xs text-green-600 mt-1">+12% zum Vormonat</div>
+              <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">€ 24,567</div>
+              <div className="text-xs text-green-600 dark:text-green-400 mt-1">+12% zum Vormonat</div>
             </div>
 
-            <div className="p-4 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-lg border border-blue-200">
+            <div className="p-4 bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-950 dark:to-cyan-950 rounded-lg border border-blue-200 dark:border-blue-800">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700">Energie</span>
-                <Zap className="h-4 w-4 text-blue-600" />
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Energie</span>
+                <Zap className="h-4 w-4 text-blue-600 dark:text-blue-400" />
               </div>
-              <div className="text-2xl font-bold text-gray-900">3,842 kWh</div>
-              <div className="text-xs text-blue-600 mt-1">+8% zum Vormonat</div>
+              <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">3,842 kWh</div>
+              <div className="text-xs text-blue-600 dark:text-blue-400 mt-1">+8% zum Vormonat</div>
             </div>
 
-            <div className="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg border border-emerald-200">
+            <div className="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950 dark:to-teal-950 rounded-lg border border-emerald-200 dark:border-emerald-800">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-700">CO₂ Ersparnis</span>
-                <Leaf className="h-4 w-4 text-emerald-600" />
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">CO₂ Ersparnis</span>
+                <Leaf className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
               </div>
-              <div className="text-2xl font-bold text-gray-900">2.1 Tonnen</div>
-              <div className="text-xs text-emerald-600 mt-1">Entspricht 450 Bäumen</div>
+              <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">2.1 Tonnen</div>
+              <div className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">Entspricht 450 Bäumen</div>
             </div>
           </CardContent>
         </Card>
@@ -309,17 +309,29 @@ export const Dashboard: React.FC = () => {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Button className="flex flex-col items-center space-y-2 h-20 p-4" variant="outline">
+            <Button 
+              className="flex flex-col items-center space-y-2 h-20 p-4" 
+              variant="outline"
+              onClick={() => navigate('/tenants')}
+            >
               <Building2 className="h-6 w-6" />
-              <span className="text-sm">Neuer Sub-Tenant</span>
+              <span className="text-sm">Sub-Tenants</span>
             </Button>
-            <Button className="flex flex-col items-center space-y-2 h-20 p-4" variant="outline">
+            <Button 
+              className="flex flex-col items-center space-y-2 h-20 p-4" 
+              variant="outline"
+              onClick={() => navigate('/billing')}
+            >
               <CreditCard className="h-6 w-6" />
               <span className="text-sm">Abrechnung</span>
             </Button>
-            <Button className="flex flex-col items-center space-y-2 h-20 p-4" variant="outline">
-              <TrendingUp className="h-6 w-6" />
-              <span className="text-sm">Statistiken</span>
+            <Button 
+              className="flex flex-col items-center space-y-2 h-20 p-4" 
+              variant="outline"
+              onClick={() => navigate('/charging-stations')}
+            >
+              <Zap className="h-6 w-6" />
+              <span className="text-sm">Ladestationen</span>
             </Button>
             <Button 
               className="flex flex-col items-center space-y-2 h-20 p-4" 

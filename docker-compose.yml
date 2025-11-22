@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  # SQL Server Database
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: cubos-charge-db
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=YourStrong!Password123
+      - MSSQL_PID=Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    networks:
+      - cubos-network
+    healthcheck:
+      test: /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P YourStrong!Password123 -Q "SELECT 1" || exit 1
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  # Backend API + OCPP Server
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cubos-charge-api
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__DefaultConnection=Server=db;Database=ChargingControlSystem;User Id=sa;Password=YourStrong!Password123;TrustServerCertificate=True;
+      - Jwt__Secret=YourSuperSecretKeyThatIsAtLeast32CharactersLong!
+      - Jwt__Issuer=ChargingControlSystem
+      - Jwt__Audience=ChargingControlSystemUsers
+      - Jwt__ExpirationMinutes=43200
+      - OCPP__ServerPort=8080
+      - OCPP__ServerUrl=ws://0.0.0.0:8080
+    ports:
+      - "5126:80"
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - cubos-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: cubos-charge-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
+    networks:
+      - cubos-network
+    restart: unless-stopped
+    environment:
+      - REACT_APP_API_URL=http://localhost:5126
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+networks:
+  cubos-network:
+    driver: bridge
+
+volumes:
+  sqlserver-data:
+    driver: local
+
+
+
+

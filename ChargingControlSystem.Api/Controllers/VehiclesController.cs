@@ -34,6 +34,8 @@ public class VehiclesController : ControllerBase
                 Type = v.Type.ToString(),
                 v.Color,
                 v.Notes,
+                v.RfidTag,
+                v.QrCode,
                 v.IsActive,
                 v.CreatedAt
             })
@@ -61,6 +63,8 @@ public class VehiclesController : ControllerBase
                 Type = v.Type.ToString(),
                 v.Color,
                 v.Notes,
+                v.RfidTag,
+                v.QrCode,
                 v.IsActive,
                 v.CreatedAt,
                 AssignmentCount = v.VehicleAssignments.Count,
@@ -92,6 +96,8 @@ public class VehiclesController : ControllerBase
             Type = Enum.Parse<ChargingControlSystem.Data.Entities.VehicleType>(dto.Type),
             Color = dto.Color,
             Notes = dto.Notes,
+            RfidTag = dto.RfidTag,
+            QrCode = dto.QrCode,
             IsActive = true,
             CreatedAt = DateTime.UtcNow
         };
@@ -121,6 +127,8 @@ public class VehiclesController : ControllerBase
         vehicle.Type = Enum.Parse<ChargingControlSystem.Data.Entities.VehicleType>(dto.Type);
         vehicle.Color = dto.Color;
         vehicle.Notes = dto.Notes;
+        vehicle.RfidTag = dto.RfidTag;
+        vehicle.QrCode = dto.QrCode;
         vehicle.IsActive = dto.IsActive;
 
         await _context.SaveChangesAsync();
@@ -149,6 +157,6 @@ public class VehiclesController : ControllerBase
     }
 }
 
-public record CreateVehicleDto(string LicensePlate, string Make, string Model, int Year, string Type, string Color, string? Notes);
-public record UpdateVehicleDto(string LicensePlate, string Make, string Model, int Year, string Type, string Color, string? Notes, bool IsActive);
+public record CreateVehicleDto(string LicensePlate, string Make, string Model, int Year, string Type, string Color, string? Notes, string? RfidTag, string? QrCode);
+public record UpdateVehicleDto(string LicensePlate, string Make, string Model, int Year, string Type, string Color, string? Notes, string? RfidTag, string? QrCode, bool IsActive);
 

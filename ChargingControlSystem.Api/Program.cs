@@ -291,6 +291,15 @@ app.UseWhen(context => !context.Request.Path.StartsWithSegments("/hubs"), appBui
 // Endpoints (müssen nach UseAuthorization kommen)
 app.MapControllers();
 
+// Health Check Endpoint (für Docker/Kubernetes)
+app.MapGet("/health", () => Results.Ok(new 
+{ 
+    status = "healthy", 
+    timestamp = DateTime.UtcNow,
+    version = "1.0.0",
+    environment = builder.Environment.EnvironmentName
+})).AllowAnonymous();
+
 // SignalR Hub für Echtzeit-Benachrichtigungen (mit CORS Policy)
 app.MapHub<ChargingControlSystem.Api.Hubs.NotificationHub>("/hubs/notifications")
     .RequireCors("AllowFrontend");
