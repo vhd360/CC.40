@@ -83,6 +83,14 @@ const isTokenExpiredOrExpiringSoon = (token: string | null): boolean => {
 const fetchWithAuth = async (url: string, options: RequestInit = {}): Promise<Response> => {
   // Check if token is expired or expiring soon, and refresh proactively
   let token = localStorage.getItem('token');
+  
+  // Validate token format (must have 3 parts separated by dots)
+  if (token && token.split('.').length !== 3) {
+    console.warn('⚠️ Token hat ungültiges Format, lösche es');
+    localStorage.removeItem('token');
+    token = null;
+  }
+  
   if (isTokenExpiredOrExpiringSoon(token)) {
     console.log('🔄 Token abgelaufen oder läuft bald ab, erneuere proaktiv...');
     const newToken = await refreshToken();
@@ -91,14 +99,22 @@ const fetchWithAuth = async (url: string, options: RequestInit = {}): Promise<Re
       console.log('✅ Token proaktiv erneuert');
     } else {
       console.error('❌ Proaktiver Token-Refresh fehlgeschlagen');
+      // If we have no valid token and refresh failed, don't send invalid token
+      token = null;
     }
   }
   
-  // Build headers with current token
+  // Build headers with current token - only add Authorization if token is valid
   let headers: HeadersInit = {
-    'Content-Type': 'application/json',
-    ...(token && { 'Authorization': `Bearer ${token}` })
+    'Content-Type': 'application/json'
   };
+  
+  if (token && token.split('.').length === 3) {
+    headers = {
+      ...headers,
+      'Authorization': `Bearer ${token}`
+    };
+  }
   
   // Merge with provided headers (allow override of Content-Type if needed)
   const customHeaders = options.headers as Record<string, string> || {};
@@ -110,7 +126,7 @@ const fetchWithAuth = async (url: string, options: RequestInit = {}): Promise<Re
   if (response.status === 401) {
     console.log('🔄 401 Fehler erhalten, versuche Token-Refresh...');
     const newToken = await refreshToken();
-    if (newToken) {
+    if (newToken && newToken.split('.').length === 3) {
       console.log('✅ Token erneuert, wiederhole Request...');
       // Retry with new token
       headers = { ...headers, 'Authorization': `Bearer ${newToken}` };
@@ -476,15 +492,26 @@ export const api = {
   },
 
   async uploadTenantLogo(file: File): Promise<{ logoUrl: string }> {
-    const token = localStorage.getItem('token');
+    let token = localStorage.getItem('token');
+    
+    // Validate token format
+    if (token && token.split('.').length !== 3) {
+      console.warn('⚠️ Token hat ungültiges Format, lösche es');
+      localStorage.removeItem('token');
+      token = null;
+    }
+    
     const formData = new FormData();
     formData.append('file', file);
     
+    const headers: Record<string, string> = {};
+    if (token && token.split('.').length === 3) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    
     const response = await fetch(`${API_BASE_URL}/upload/tenant-logo`, {
       method: 'POST',
-      headers: {
-        ...(token && { 'Authorization': `Bearer ${token}` })
-      },
+      headers,
       body: formData,
     });
     

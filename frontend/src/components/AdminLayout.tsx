@@ -102,7 +102,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ onLogout }) => {
       {/* Mobile sidebar */}
       <div className={`fixed inset-0 z-50 lg:hidden ${sidebarOpen ? 'block' : 'hidden'}`}>
         <div className="fixed inset-0 bg-black bg-opacity-25" onClick={() => setSidebarOpen(false)} />
-        <div className="fixed left-0 top-0 bottom-0 w-64 bg-white dark:bg-gray-900 shadow-lg">
+        <div className="fixed left-0 top-0 bottom-0 w-64 bg-white dark:bg-gray-900 shadow-lg flex flex-col">
           <div className="flex items-center justify-between p-4 border-b dark:border-gray-800">
             <div className="flex items-center space-x-2">
               {logoUrl ? (
@@ -116,7 +116,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ onLogout }) => {
               <X className="h-4 w-4" />
             </Button>
           </div>
-          <nav className="p-4">
+          
+          <nav className="flex-1 overflow-y-auto p-4">
             <ul className="space-y-2">
               {navigation.map((item) => (
                 <li key={item.name}>
@@ -134,8 +135,44 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ onLogout }) => {
                   </Link>
                 </li>
               ))}
+              <li>
+                <Link
+                  to="/profile"
+                  className={`flex items-center space-x-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                    location.pathname === '/profile'
+                      ? 'bg-primary/10 text-primary hover:bg-primary/20'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100'
+                  }`}
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  <UserCog className="h-4 w-4" />
+                  <span>Profil</span>
+                </Link>
+              </li>
             </ul>
           </nav>
+          
+          {/* User Section Mobile */}
+          <div className="border-t border-gray-200 dark:border-gray-800 p-4">
+            <div className="space-y-3">
+              <div className="flex items-center space-x-2">
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback className="text-xs">{userInfo.name.charAt(0)}</AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                    {userInfo.name}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{userInfo.email}</p>
+                </div>
+                <ThemeToggle />
+              </div>
+              <Button variant="outline" size="sm" className="w-full" onClick={onLogout}>
+                <LogOut className="h-4 w-4 mr-2" />
+                Abmelden
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 

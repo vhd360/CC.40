@@ -367,7 +367,7 @@ export const AuthorizationMethods: React.FC = () => {
 
                   <div>
                     <span className="text-xs text-gray-600 dark:text-gray-400">Identifikator</span>
-                    <div className="text-sm font-mono bg-gray-100 px-2 py-1 rounded">
+                    <div className="text-sm font-mono bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2 py-1 rounded">
                       {method.identifier.length > 20 
                         ? `${method.identifier.substring(0, 20)}...` 
                         : method.identifier}

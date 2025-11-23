@@ -45,11 +45,20 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Prüfe Token und Rolle im localStorage
+    // Validate and clean invalid tokens on app start
     const token = localStorage.getItem('token');
+    if (token && token.split('.').length !== 3) {
+      console.warn('⚠️ Ungültiges Token-Format beim App-Start erkannt, lösche Token');
+      localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+    }
+    
+    // Prüfe Token und Rolle im localStorage
+    const validToken = localStorage.getItem('token');
     const userStr = localStorage.getItem('user');
     
-    if (token && userStr) {
+    if (validToken && userStr) {
       try {
         const user = JSON.parse(userStr);
         setUserRole(user.role);
