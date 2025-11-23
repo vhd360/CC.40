@@ -280,6 +280,7 @@ builder.Services.AddTransient<ChargingControlSystem.OCPP.Handlers.IOcppMessageHa
 });
 builder.Services.AddSingleton<ChargingControlSystem.OCPP.Server.OcppWebSocketServer>();
 builder.Services.AddHostedService<ChargingControlSystem.OCPP.Services.OcppHostedService>();
+builder.Services.AddScoped<IOcppCommandService, OcppCommandService>();
 builder.Services.AddScoped<IInvoicePdfService, InvoicePdfService>();
 builder.Services.AddScoped<IQrCodeService, QrCodeService>();
 

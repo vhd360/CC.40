@@ -272,6 +272,31 @@
             <response code="404">Ladesäule nicht gefunden</response>
             <response code="401">Nicht autorisiert</response>
         </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.ChargingStationsController.GetConfiguration(System.Guid)">
+            <summary>
+            Konfiguration einer Ladesäule abrufen
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.ChargingStationsController.ChangeConfiguration(System.Guid,ChargingControlSystem.OCPP.Models.ChangeConfigurationRequest)">
+            <summary>
+            Konfiguration einer Ladesäule ändern
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.ChargingStationsController.RequestDiagnostics(System.Guid,ChargingControlSystem.Api.Controllers.RequestDiagnosticsDto)">
+            <summary>
+            Diagnoseinformationen anfordern
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.ChargingStationsController.GetFirmwareHistory(System.Guid)">
+            <summary>
+            Firmware-Historie abrufen
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.ChargingStationsController.GetDiagnosticsHistory(System.Guid)">
+            <summary>
+            Diagnose-Historie abrufen
+            </summary>
+        </member>
         <member name="M:ChargingControlSystem.Api.Controllers.PermissionsController.GetAll">
             <summary>
             Alle verfügbaren Berechtigungen abrufen

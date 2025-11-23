@@ -27,6 +27,37 @@ public class ChargingStation
     [MaxLength(100)]
     public string Model { get; set; } = string.Empty;
 
+    // OCPP BootNotification fields
+    [MaxLength(100)]
+    public string? SerialNumber { get; set; } // ChargePointSerialNumber oder ChargeBoxSerialNumber
+
+    [MaxLength(100)]
+    public string? FirmwareVersion { get; set; }
+
+    [MaxLength(50)]
+    public string? Iccid { get; set; } // SIM-Karten ICCID
+
+    [MaxLength(50)]
+    public string? Imsi { get; set; } // SIM-Karten IMSI
+
+    [MaxLength(100)]
+    public string? MeterType { get; set; }
+
+    [MaxLength(100)]
+    public string? MeterSerialNumber { get; set; }
+
+    // Configuration
+    [Column(TypeName = "nvarchar(max)")]
+    public string? ConfigurationJson { get; set; } // JSON with configuration key-value pairs
+
+    public DateTime? LastConfigurationUpdate { get; set; }
+
+    // Firmware
+    [MaxLength(50)]
+    public string? FirmwareStatus { get; set; } // Current firmware status
+
+    public DateTime? LastFirmwareStatusUpdate { get; set; }
+
     [Required]
     public ChargingStationType Type { get; set; }
 
@@ -70,6 +101,8 @@ public class ChargingStation
     // Navigation properties
     public virtual ChargingPark ChargingPark { get; set; } = null!;
     public virtual ICollection<ChargingPoint> ChargingPoints { get; set; } = new List<ChargingPoint>();
+    public virtual ICollection<ChargingStationDiagnostics> Diagnostics { get; set; } = new List<ChargingStationDiagnostics>();
+    public virtual ICollection<ChargingStationFirmwareHistory> FirmwareHistory { get; set; } = new List<ChargingStationFirmwareHistory>();
 }
 
 public enum ChargingStationType

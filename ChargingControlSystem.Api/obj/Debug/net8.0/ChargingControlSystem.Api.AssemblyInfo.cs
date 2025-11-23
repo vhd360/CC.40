@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ChargingControlSystem.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+14d06333100265b54ea1a5c391f1c040d0cacc54")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+9e7f8d1fb562120bad608e4c6cf1f33eb351ff14")]
 [assembly: System.Reflection.AssemblyProductAttribute("ChargingControlSystem.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ChargingControlSystem.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

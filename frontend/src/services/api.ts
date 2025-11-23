@@ -653,6 +653,57 @@ export const api = {
     }
   },
 
+  // OCPP Configuration
+  async getStationConfiguration(id: string): Promise<any> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/charging-stations/${id}/configuration`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: response.statusText }));
+      throw new Error(errorData.error || 'Failed to get station configuration');
+    }
+    return response.json();
+  },
+
+  async changeStationConfiguration(id: string, key: string, value: string): Promise<any> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/charging-stations/${id}/configuration`, {
+      method: 'POST',
+      body: JSON.stringify({ key, value }),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to change configuration');
+    }
+    return response.json();
+  },
+
+  // OCPP Diagnostics
+  async requestStationDiagnostics(id: string, location: string, startTime?: string, stopTime?: string): Promise<any> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/charging-stations/${id}/diagnostics`, {
+      method: 'POST',
+      body: JSON.stringify({ 
+        location,
+        startTime: startTime || null,
+        stopTime: stopTime || null
+      }),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to request diagnostics');
+    }
+    return response.json();
+  },
+
+  async getStationFirmwareHistory(id: string): Promise<any[]> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/charging-stations/${id}/firmware-history`);
+    if (!response.ok) throw new Error('Failed to get firmware history');
+    return response.json();
+  },
+
+  async getStationDiagnosticsHistory(id: string): Promise<any[]> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/charging-stations/${id}/diagnostics-history`);
+    if (!response.ok) throw new Error('Failed to get diagnostics history');
+    return response.json();
+  },
+
   async createChargingStation(station: {
     chargingParkId: string;
     stationId: string;

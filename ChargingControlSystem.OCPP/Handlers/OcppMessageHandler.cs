@@ -43,6 +43,9 @@ public class OcppMessageHandler : IOcppMessageHandler
             "Heartbeat" => await HandleHeartbeatAsync(chargeBoxId),
             "StatusNotification" => await HandleStatusNotificationAsync(chargeBoxId, payload.ToObject<StatusNotificationRequest>(serializer)!),
             "FirmwareStatusNotification" => await HandleFirmwareStatusNotificationAsync(chargeBoxId, payload.ToObject<FirmwareStatusNotificationRequest>(serializer)!),
+            "GetConfiguration" => await HandleGetConfigurationAsync(chargeBoxId, payload.ToObject<GetConfigurationRequest>(serializer)!),
+            "ChangeConfiguration" => await HandleChangeConfigurationAsync(chargeBoxId, payload.ToObject<ChangeConfigurationRequest>(serializer)!),
+            "GetDiagnostics" => await HandleGetDiagnosticsAsync(chargeBoxId, payload.ToObject<GetDiagnosticsRequest>(serializer)!),
             "Authorize" => await HandleAuthorizeAsync(chargeBoxId, payload.ToObject<AuthorizeRequest>(serializer)!),
             "StartTransaction" => await HandleStartTransactionAsync(chargeBoxId, payload.ToObject<StartTransactionRequest>(serializer)!),
             "StopTransaction" => await HandleStopTransactionAsync(chargeBoxId, payload.ToObject<StopTransactionRequest>(serializer)!),
@@ -71,10 +74,19 @@ public class OcppMessageHandler : IOcppMessageHandler
             };
         }
 
-        // Update station information
+        // Update station information from BootNotification
         var previousStatus = station.Status;
         station.Vendor = request.ChargePointVendor;
         station.Model = request.ChargePointModel;
+        
+        // Additional BootNotification fields
+        station.SerialNumber = request.ChargePointSerialNumber ?? request.ChargeBoxSerialNumber;
+        station.FirmwareVersion = request.FirmwareVersion;
+        station.Iccid = request.Iccid;
+        station.Imsi = request.Imsi;
+        station.MeterType = request.MeterType;
+        station.MeterSerialNumber = request.MeterSerialNumber;
+        
         station.LastHeartbeat = DateTime.UtcNow;
         station.Status = ChargingStationStatus.Available;
 
@@ -96,8 +108,9 @@ public class OcppMessageHandler : IOcppMessageHandler
             await NotifyStationStatusChangedAsync(station.ChargingPark.TenantId, station.Id, "Available", "Station online");
         }
 
-        _logger.LogInformation("BootNotification from {ChargeBoxId}: {Vendor} {Model}", 
-            chargeBoxId, request.ChargePointVendor, request.ChargePointModel);
+        _logger.LogInformation("BootNotification from {ChargeBoxId}: {Vendor} {Model} (FW: {FirmwareVersion}, Serial: {SerialNumber})", 
+            chargeBoxId, request.ChargePointVendor, request.ChargePointModel, 
+            request.FirmwareVersion ?? "N/A", station.SerialNumber ?? "N/A");
 
         return new BootNotificationResponse
         {
@@ -273,15 +286,46 @@ public class OcppMessageHandler : IOcppMessageHandler
 
         if (station != null)
         {
-            // Log firmware status update
-            _logger.LogInformation("FirmwareStatusNotification from {ChargeBoxId}: Status={Status}, Info={Info}", 
-                chargeBoxId, request.Status, request.Info ?? "N/A");
+            // Update firmware status in station
+            station.FirmwareStatus = request.Status;
+            station.LastFirmwareStatusUpdate = DateTime.UtcNow;
 
-            // Optionally store firmware status in station metadata or log it
-            // For now, we just log it. In a production system, you might want to:
-            // - Store firmware version in station entity
-            // - Track firmware update history
-            // - Send notifications to admins about failed updates
+            // Create firmware history entry
+            var firmwareHistory = new ChargingStationFirmwareHistory
+            {
+                Id = Guid.NewGuid(),
+                ChargingStationId = station.Id,
+                FirmwareVersion = station.FirmwareVersion ?? "Unknown",
+                Status = request.Status,
+                Info = request.Info,
+                Timestamp = request.Timestamp ?? DateTime.UtcNow
+            };
+
+            context.ChargingStationFirmwareHistory.Add(firmwareHistory);
+
+            await context.SaveChangesAsync();
+
+            // Log firmware status update
+            _logger.LogInformation("FirmwareStatusNotification from {ChargeBoxId}: Status={Status}, Info={Info}, Version={Version}", 
+                chargeBoxId, request.Status, request.Info ?? "N/A", station.FirmwareVersion ?? "Unknown");
+
+            // Send notification for critical firmware status changes
+            if (request.Status == FirmwareStatus.InstallationFailed || request.Status == FirmwareStatus.DownloadFailed)
+            {
+                await NotifyStationStatusChangedAsync(
+                    station.ChargingPark.TenantId, 
+                    station.Id, 
+                    "FirmwareUpdateFailed", 
+                    $"Firmware update failed: {request.Status} - {request.Info ?? "No details"}");
+            }
+            else if (request.Status == FirmwareStatus.Installed)
+            {
+                await NotifyStationStatusChangedAsync(
+                    station.ChargingPark.TenantId, 
+                    station.Id, 
+                    "FirmwareUpdateCompleted", 
+                    $"Firmware update completed successfully: {station.FirmwareVersion ?? "Unknown"}");
+            }
         }
         else
         {
@@ -289,6 +333,178 @@ public class OcppMessageHandler : IOcppMessageHandler
         }
 
         return new FirmwareStatusNotificationResponse();
+    }
+
+    private async Task<GetConfigurationResponse> HandleGetConfigurationAsync(string chargeBoxId, GetConfigurationRequest request)
+    {
+        using var context = await _contextFactory.CreateDbContextAsync();
+
+        var station = await context.ChargingStations
+            .FirstOrDefaultAsync(s => s.ChargeBoxId == chargeBoxId);
+
+        if (station == null)
+        {
+            _logger.LogWarning("GetConfiguration from unknown ChargeBox: {ChargeBoxId}", chargeBoxId);
+            return new GetConfigurationResponse
+            {
+                ConfigurationKey = new List<ConfigurationKey>(),
+                UnknownKey = request.Key
+            };
+        }
+
+        // If configuration is stored, deserialize it
+        var configurationKeys = new List<ConfigurationKey>();
+        if (!string.IsNullOrEmpty(station.ConfigurationJson))
+        {
+            try
+            {
+                var storedConfig = Newtonsoft.Json.JsonConvert.DeserializeObject<List<ConfigurationKey>>(station.ConfigurationJson);
+                if (storedConfig != null)
+                {
+                    configurationKeys = storedConfig;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to deserialize configuration for station {ChargeBoxId}", chargeBoxId);
+            }
+        }
+
+        // If specific keys requested, filter them
+        if (request.Key != null && request.Key.Any())
+        {
+            var requestedKeys = request.Key.ToHashSet();
+            var foundKeys = configurationKeys.Where(k => requestedKeys.Contains(k.Key)).ToList();
+            var unknownKeys = requestedKeys.Where(k => !configurationKeys.Any(c => c.Key == k)).ToList();
+
+            return new GetConfigurationResponse
+            {
+                ConfigurationKey = foundKeys,
+                UnknownKey = unknownKeys.Any() ? unknownKeys : null
+            };
+        }
+
+        // Return all configuration keys
+        return new GetConfigurationResponse
+        {
+            ConfigurationKey = configurationKeys,
+            UnknownKey = null
+        };
+    }
+
+    private async Task<ChangeConfigurationResponse> HandleChangeConfigurationAsync(string chargeBoxId, ChangeConfigurationRequest request)
+    {
+        using var context = await _contextFactory.CreateDbContextAsync();
+
+        var station = await context.ChargingStations
+            .FirstOrDefaultAsync(s => s.ChargeBoxId == chargeBoxId);
+
+        if (station == null)
+        {
+            _logger.LogWarning("ChangeConfiguration from unknown ChargeBox: {ChargeBoxId}", chargeBoxId);
+            return new ChangeConfigurationResponse
+            {
+                Status = ConfigurationStatus.Rejected
+            };
+        }
+
+        // Load current configuration
+        var configurationKeys = new List<ConfigurationKey>();
+        if (!string.IsNullOrEmpty(station.ConfigurationJson))
+        {
+            try
+            {
+                var storedConfig = Newtonsoft.Json.JsonConvert.DeserializeObject<List<ConfigurationKey>>(station.ConfigurationJson);
+                if (storedConfig != null)
+                {
+                    configurationKeys = storedConfig;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to deserialize configuration for station {ChargeBoxId}", chargeBoxId);
+            }
+        }
+
+        // Check if key exists and is readonly
+        var existingKey = configurationKeys.FirstOrDefault(k => k.Key == request.Key);
+        if (existingKey != null && existingKey.Readonly)
+        {
+            _logger.LogWarning("Attempted to change readonly configuration key {Key} on station {ChargeBoxId}", request.Key, chargeBoxId);
+            return new ChangeConfigurationResponse
+            {
+                Status = ConfigurationStatus.Rejected
+            };
+        }
+
+        // Update or add configuration key
+        if (existingKey != null)
+        {
+            existingKey.Value = request.Value;
+        }
+        else
+        {
+            configurationKeys.Add(new ConfigurationKey
+            {
+                Key = request.Key,
+                Value = request.Value,
+                Readonly = false
+            });
+        }
+
+        // Save configuration
+        station.ConfigurationJson = Newtonsoft.Json.JsonConvert.SerializeObject(configurationKeys);
+        station.LastConfigurationUpdate = DateTime.UtcNow;
+
+        await context.SaveChangesAsync();
+
+        _logger.LogInformation("ChangeConfiguration on {ChargeBoxId}: Key={Key}, Value={Value}", 
+            chargeBoxId, request.Key, request.Value);
+
+        return new ChangeConfigurationResponse
+        {
+            Status = ConfigurationStatus.Accepted
+        };
+    }
+
+    private async Task<GetDiagnosticsResponse> HandleGetDiagnosticsAsync(string chargeBoxId, GetDiagnosticsRequest request)
+    {
+        using var context = await _contextFactory.CreateDbContextAsync();
+
+        var station = await context.ChargingStations
+            .FirstOrDefaultAsync(s => s.ChargeBoxId == chargeBoxId);
+
+        if (station == null)
+        {
+            _logger.LogWarning("GetDiagnostics from unknown ChargeBox: {ChargeBoxId}", chargeBoxId);
+            return new GetDiagnosticsResponse();
+        }
+
+        // Create diagnostics request record
+        var diagnostics = new ChargingStationDiagnostics
+        {
+            Id = Guid.NewGuid(),
+            ChargingStationId = station.Id,
+            RequestedAt = DateTime.UtcNow,
+            Status = DiagnosticsStatus.Pending,
+            StartTime = request.StartTime,
+            StopTime = request.StopTime
+        };
+
+        context.ChargingStationDiagnostics.Add(diagnostics);
+        await context.SaveChangesAsync();
+
+        _logger.LogInformation("GetDiagnostics requested for {ChargeBoxId}: Location={Location}, StartTime={StartTime}, StopTime={StopTime}", 
+            chargeBoxId, request.Location, request.StartTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "N/A", 
+            request.StopTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "N/A");
+
+        // Note: The actual diagnostics file will be uploaded by the charge point to the specified location
+        // This handler just records the request. The file upload would be handled separately (e.g., via HTTP endpoint)
+
+        return new GetDiagnosticsResponse
+        {
+            FileName = null // File will be available after charge point uploads it
+        };
     }
 
     private async Task<AuthorizeResponse> HandleAuthorizeAsync(string chargeBoxId, AuthorizeRequest request)
@@ -822,7 +1038,7 @@ public class OcppMessageHandler : IOcppMessageHandler
                 _logger.LogInformation("Sending SignalR notification: TenantId={TenantId}, StationId={StationId}, Status={Status}", 
                     tenantId, stationId, status);
                 var task = method.Invoke(notificationService, new object[] { tenantId, stationId, status, message });
-                if (task is Task notifyTask)
+                if (task is Task notifyTask && notifyTask != null)
                 {
                     await notifyTask;
                     _logger.LogInformation("Successfully sent SignalR notification for station {StationId}, Status={Status}", stationId, status);
@@ -872,7 +1088,7 @@ public class OcppMessageHandler : IOcppMessageHandler
             if (method != null)
             {
                 var task = method.Invoke(notificationService, new object[] { tenantId, connectorId, status, message });
-                if (task is Task notifyTask)
+                if (task is Task notifyTask && notifyTask != null)
                 {
                     await notifyTask;
                 }

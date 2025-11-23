@@ -20,8 +20,13 @@ import {
   Key,
   Layers,
   Plus,
-  Trash2
+  Trash2,
+  Settings,
+  FileText,
+  History,
+  Download
 } from 'lucide-react';
+import { api } from '../services/api';
 
 export const ChargingStationDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -40,6 +45,26 @@ export const ChargingStationDetail: React.FC = () => {
     id: null
   });
   const { showToast } = useToast();
+  
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'overview' | 'configuration' | 'firmware' | 'diagnostics'>('overview');
+  
+  // Configuration state
+  const [configuration, setConfiguration] = useState<any[]>([]);
+  const [loadingConfiguration, setLoadingConfiguration] = useState(false);
+  const [configKey, setConfigKey] = useState('');
+  const [configValue, setConfigValue] = useState('');
+  
+  // Firmware state
+  const [firmwareHistory, setFirmwareHistory] = useState<any[]>([]);
+  const [loadingFirmware, setLoadingFirmware] = useState(false);
+  
+  // Diagnostics state
+  const [diagnosticsHistory, setDiagnosticsHistory] = useState<any[]>([]);
+  const [loadingDiagnostics, setLoadingDiagnostics] = useState(false);
+  const [diagnosticsLocation, setDiagnosticsLocation] = useState('https://example.com/upload');
+  const [diagnosticsStartTime, setDiagnosticsStartTime] = useState('');
+  const [diagnosticsStopTime, setDiagnosticsStopTime] = useState('');
 
   const loadStation = async () => {
     try {
@@ -81,6 +106,116 @@ export const ChargingStationDetail: React.FC = () => {
   useEffect(() => {
     loadStation();
   }, [id]);
+
+  useEffect(() => {
+    if (activeTab === 'configuration' && id) {
+      loadConfiguration();
+    } else if (activeTab === 'firmware' && id) {
+      loadFirmwareHistory();
+    } else if (activeTab === 'diagnostics' && id) {
+      loadDiagnosticsHistory();
+    }
+  }, [activeTab, id]);
+
+  const loadConfiguration = async () => {
+    if (!id) return;
+    try {
+      setLoadingConfiguration(true);
+      const config = await api.getStationConfiguration(id);
+      setConfiguration(config.configurationKey || []);
+      
+      // Only show warning if configuration is empty AND station appears to be offline
+      if (config.configurationKey && config.configurationKey.length === 0) {
+        const isStationOnline = station?.lastHeartbeat && 
+          (new Date().getTime() - new Date(station.lastHeartbeat).getTime()) < 10 * 60 * 1000; // 10 minutes
+        
+        if (!isStationOnline) {
+          showToast('Keine Konfiguration verfügbar. Die Station ist möglicherweise nicht verbunden.', 'warning');
+        } else {
+          // Station is online but no configuration - might be normal for some stations
+          showToast('Keine Konfiguration verfügbar. Die Station hat möglicherweise keine Konfigurationsparameter.', 'info');
+        }
+      } else if (config.configurationKey && config.configurationKey.length > 0) {
+        showToast(`Konfiguration erfolgreich geladen: ${config.configurationKey.length} Parameter`, 'success');
+      }
+    } catch (error: any) {
+      console.error('Failed to load configuration:', error);
+      const errorMessage = error.message || 'Fehler beim Laden der Konfiguration';
+      showToast(errorMessage, 'error');
+      // Set empty configuration on error to prevent UI issues
+      setConfiguration([]);
+    } finally {
+      setLoadingConfiguration(false);
+    }
+  };
+
+  const handleChangeConfiguration = async () => {
+    if (!id || !configKey || !configValue) {
+      showToast('Bitte füllen Sie alle Felder aus', 'error');
+      return;
+    }
+    try {
+      await api.changeStationConfiguration(id, configKey, configValue);
+      showToast('Konfiguration erfolgreich geändert', 'success');
+      setConfigKey('');
+      setConfigValue('');
+      await loadConfiguration();
+    } catch (error: any) {
+      console.error('Failed to change configuration:', error);
+      showToast(error.message || 'Fehler beim Ändern der Konfiguration', 'error');
+    }
+  };
+
+  const loadFirmwareHistory = async () => {
+    if (!id) return;
+    try {
+      setLoadingFirmware(true);
+      const history = await api.getStationFirmwareHistory(id);
+      setFirmwareHistory(history);
+    } catch (error: any) {
+      console.error('Failed to load firmware history:', error);
+      showToast(error.message || 'Fehler beim Laden der Firmware-Historie', 'error');
+    } finally {
+      setLoadingFirmware(false);
+    }
+  };
+
+  const loadDiagnosticsHistory = async () => {
+    if (!id) return;
+    try {
+      setLoadingDiagnostics(true);
+      const history = await api.getStationDiagnosticsHistory(id);
+      setDiagnosticsHistory(history);
+    } catch (error: any) {
+      console.error('Failed to load diagnostics history:', error);
+      showToast(error.message || 'Fehler beim Laden der Diagnose-Historie', 'error');
+    } finally {
+      setLoadingDiagnostics(false);
+    }
+  };
+
+  const handleRequestDiagnostics = async () => {
+    if (!id || !diagnosticsLocation) {
+      showToast('Bitte geben Sie eine Upload-URL an', 'error');
+      return;
+    }
+    try {
+      await api.requestStationDiagnostics(
+        id,
+        diagnosticsLocation,
+        diagnosticsStartTime || undefined,
+        diagnosticsStopTime || undefined
+      );
+      showToast('Diagnose-Anfrage erfolgreich gesendet', 'success');
+      setDiagnosticsLocation('https://example.com/upload');
+      setDiagnosticsStartTime('');
+      setDiagnosticsStopTime('');
+      await loadDiagnosticsHistory();
+    } catch (error: any) {
+      console.error('Failed to request diagnostics:', error);
+      showToast(error.message || 'Fehler beim Anfordern der Diagnose', 'error');
+    }
+  };
 
   const handleSave = async () => {
     try {
@@ -421,7 +556,59 @@ export const ChargingStationDetail: React.FC = () => {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Tabs */}
+      <div className="border-b border-gray-200 dark:border-gray-800">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'overview'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            Übersicht
+          </button>
+          <button
+            onClick={() => setActiveTab('configuration')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center ${
+              activeTab === 'configuration'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            <Settings className="h-4 w-4 mr-2" />
+            Konfiguration
+          </button>
+          <button
+            onClick={() => setActiveTab('firmware')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center ${
+              activeTab === 'firmware'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            <History className="h-4 w-4 mr-2" />
+            Firmware
+          </button>
+          <button
+            onClick={() => setActiveTab('diagnostics')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm flex items-center ${
+              activeTab === 'diagnostics'
+                ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+            }`}
+          >
+            <FileText className="h-4 w-4 mr-2" />
+            Diagnosen
+          </button>
+        </nav>
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'overview' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Grunddaten */}
         <Card>
           <CardHeader>
@@ -786,10 +973,10 @@ export const ChargingStationDetail: React.FC = () => {
             )}
           </CardContent>
         </Card>
-      </div>
+          </div>
 
-      {/* Ladepunkte (EVSE) */}
-      <Card>
+          {/* Ladepunkte (EVSE) */}
+          <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
@@ -944,6 +1131,263 @@ export const ChargingStationDetail: React.FC = () => {
           />
         </DialogContent>
       </Dialog>
+        </div>
+      )}
+
+      {/* Configuration Tab */}
+
+      {/* Configuration Tab */}
+      {activeTab === 'configuration' && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Settings className="h-5 w-5 mr-2 text-blue-600" />
+                Konfiguration
+              </CardTitle>
+              <CardDescription>
+                Konfigurationsparameter der Ladestation abrufen und ändern
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex justify-between items-center">
+                <Button onClick={loadConfiguration} disabled={loadingConfiguration}>
+                  {loadingConfiguration ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Lade...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4 mr-2" />
+                      Konfiguration abrufen
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {configuration.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="font-medium text-gray-900 dark:text-gray-100">Aktuelle Konfiguration</h3>
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full">
+                      <thead className="bg-gray-50 dark:bg-gray-800">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-900 dark:text-gray-100">Key</th>
+                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-900 dark:text-gray-100">Value</th>
+                          <th className="px-4 py-2 text-left text-sm font-medium text-gray-900 dark:text-gray-100">Readonly</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                        {configuration.map((config: any, index: number) => (
+                          <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                            <td className="px-4 py-2 text-sm font-mono text-gray-900 dark:text-gray-100">{config.key}</td>
+                            <td className="px-4 py-2 text-sm text-gray-700 dark:text-gray-300">{config.value || '-'}</td>
+                            <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">
+                              {config.readonly ? '✓' : '-'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              <div className="border-t pt-4">
+                <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-4">Konfiguration ändern</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="configKey">Key</Label>
+                    <Input
+                      id="configKey"
+                      value={configKey}
+                      onChange={(e) => setConfigKey(e.target.value)}
+                      placeholder="z.B. HeartbeatInterval"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="configValue">Value</Label>
+                    <Input
+                      id="configValue"
+                      value={configValue}
+                      onChange={(e) => setConfigValue(e.target.value)}
+                      placeholder="z.B. 300"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <Button onClick={handleChangeConfiguration} className="w-full">
+                      Ändern
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Firmware Tab */}
+      {activeTab === 'firmware' && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <History className="h-5 w-5 mr-2 text-blue-600" />
+                Firmware-Historie
+              </CardTitle>
+              <CardDescription>
+                Verlauf aller Firmware-Updates und Statusänderungen
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingFirmware ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                  <span className="ml-2 text-gray-600 dark:text-gray-400">Lade Firmware-Historie...</span>
+                </div>
+              ) : firmwareHistory.length === 0 ? (
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  Keine Firmware-Historie verfügbar
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {firmwareHistory.map((entry: any) => (
+                    <div key={entry.id} className="border rounded-lg p-4">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="font-medium text-gray-900 dark:text-gray-100">
+                            Version: {entry.firmwareVersion}
+                          </div>
+                          <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                            Status: <span className="font-medium">{entry.status}</span>
+                          </div>
+                          {entry.info && (
+                            <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                              {entry.info}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">
+                          {new Date(entry.timestamp).toLocaleString('de-DE')}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Diagnostics Tab */}
+      {activeTab === 'diagnostics' && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <FileText className="h-5 w-5 mr-2 text-blue-600" />
+                Diagnoseinformationen
+              </CardTitle>
+              <CardDescription>
+                Diagnoseinformationen anfordern und Historie einsehen
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="border rounded-lg p-4">
+                <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-4">Neue Diagnose anfordern</h3>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="diagnosticsLocation">Upload-URL *</Label>
+                    <Input
+                      id="diagnosticsLocation"
+                      value={diagnosticsLocation}
+                      onChange={(e) => setDiagnosticsLocation(e.target.value)}
+                      placeholder="https://example.com/upload"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="diagnosticsStartTime">Startzeit (optional)</Label>
+                      <Input
+                        id="diagnosticsStartTime"
+                        type="datetime-local"
+                        value={diagnosticsStartTime}
+                        onChange={(e) => setDiagnosticsStartTime(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="diagnosticsStopTime">Endzeit (optional)</Label>
+                      <Input
+                        id="diagnosticsStopTime"
+                        type="datetime-local"
+                        value={diagnosticsStopTime}
+                        onChange={(e) => setDiagnosticsStopTime(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <Button onClick={handleRequestDiagnostics}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Diagnose anfordern
+                  </Button>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-4">Diagnose-Historie</h3>
+                {loadingDiagnostics ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                    <span className="ml-2 text-gray-600 dark:text-gray-400">Lade Diagnose-Historie...</span>
+                  </div>
+                ) : diagnosticsHistory.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    Keine Diagnose-Anfragen vorhanden
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {diagnosticsHistory.map((entry: any) => (
+                      <div key={entry.id} className="border rounded-lg p-4">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="font-medium text-gray-900 dark:text-gray-100">
+                              Status: <span className={entry.status === 'Completed' ? 'text-green-600' : entry.status === 'Failed' ? 'text-red-600' : 'text-yellow-600'}>{entry.status}</span>
+                            </div>
+                            {entry.fileName && (
+                              <div className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                Datei: {entry.fileName}
+                              </div>
+                            )}
+                            {entry.diagnosticsUrl && (
+                              <div className="text-sm text-blue-600 dark:text-blue-400 mt-1">
+                                <a href={entry.diagnosticsUrl} target="_blank" rel="noopener noreferrer">
+                                  {entry.diagnosticsUrl}
+                                </a>
+                              </div>
+                            )}
+                            {entry.errorMessage && (
+                              <div className="text-sm text-red-600 dark:text-red-400 mt-1">
+                                Fehler: {entry.errorMessage}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">
+                            <div>Angefordert: {new Date(entry.requestedAt).toLocaleString('de-DE')}</div>
+                            {entry.completedAt && (
+                              <div>Abgeschlossen: {new Date(entry.completedAt).toLocaleString('de-DE')}</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Delete Confirmation Dialogs */}
       <ConfirmDialog

@@ -25,6 +25,7 @@ public class OcppWebSocketServer
     private readonly HttpListener _httpListener;
     private readonly ConcurrentDictionary<string, WebSocket> _connections;
     private readonly IServiceProvider _serviceProvider;
+    private readonly ConcurrentDictionary<string, string> _pendingActions; // uniqueId -> action
     private CancellationTokenSource? _cancellationTokenSource;
 
     public OcppWebSocketServer(
@@ -37,6 +38,7 @@ public class OcppWebSocketServer
         _httpListener = new HttpListener();
         _httpListener.Prefixes.Add(prefix);
         _connections = new ConcurrentDictionary<string, WebSocket>();
+        _pendingActions = new ConcurrentDictionary<string, string>();
     }
 
     public async Task StartAsync(CancellationToken cancellationToken = default)
@@ -191,8 +193,26 @@ public class OcppWebSocketServer
             }
             else if (messageTypeId == (int)MessageType.CALLRESULT)
             {
-                // Handle responses to our requests (not implemented in this basic version)
+                // Handle responses to our requests
                 _logger.LogDebug("Received CALLRESULT for message {UniqueId}", uniqueId);
+                
+                // Try to get the action from pending actions
+                if (_pendingActions.TryRemove(uniqueId, out var action))
+                {
+                    _logger.LogInformation("Processing CALLRESULT for {Action} from {ChargeBoxId}", action, chargeBoxId);
+                    
+                    // Parse the response payload (index 2 in CALLRESULT)
+                    if (jArray.Count > 2)
+                    {
+                        var responsePayload = jArray[2];
+                        await HandleResponseAsync(chargeBoxId, action, responsePayload);
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning("Received CALLRESULT for unknown uniqueId: {UniqueId}", uniqueId);
+                }
+                
                 return string.Empty;
             }
             else if (messageTypeId == (int)MessageType.CALLERROR)
@@ -240,6 +260,9 @@ public class OcppWebSocketServer
 
         var uniqueId = Guid.NewGuid().ToString();
         
+        // Store the action for this uniqueId to process the response later
+        _pendingActions.TryAdd(uniqueId, action);
+        
         // Use JsonSerializerSettings to ignore null values (OCPP spec requires this)
         var jsonSettings = new JsonSerializerSettings
         {
@@ -262,7 +285,143 @@ public class OcppWebSocketServer
             true,
             CancellationToken.None);
 
-        _logger.LogInformation("Sent {Action} to {ChargeBoxId}", action, chargeBoxId);
+        _logger.LogInformation("Sent {Action} to {ChargeBoxId} with uniqueId {UniqueId}", action, chargeBoxId, uniqueId);
+    }
+    
+    private async Task HandleResponseAsync(string chargeBoxId, string action, JToken responsePayload)
+    {
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            var contextFactory = scope.ServiceProvider.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+            using var context = await contextFactory.CreateDbContextAsync();
+            
+            var station = await context.ChargingStations
+                .FirstOrDefaultAsync(s => s.ChargeBoxId == chargeBoxId);
+                
+            if (station == null)
+            {
+                _logger.LogWarning("Received response for unknown ChargeBox: {ChargeBoxId}", chargeBoxId);
+                return;
+            }
+            
+            switch (action)
+            {
+                case "GetConfiguration":
+                    await HandleGetConfigurationResponseAsync(context, station, responsePayload);
+                    break;
+                case "ChangeConfiguration":
+                    _logger.LogInformation("ChangeConfiguration response received for {ChargeBoxId}", chargeBoxId);
+                    // Response is already handled by the command service
+                    break;
+                case "GetDiagnostics":
+                    await HandleGetDiagnosticsResponseAsync(context, station, responsePayload);
+                    break;
+                default:
+                    _logger.LogDebug("No special handling for {Action} response", action);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error handling {Action} response from {ChargeBoxId}", action, chargeBoxId);
+        }
+    }
+    
+    private async Task HandleGetConfigurationResponseAsync(ApplicationDbContext context, ChargingStation station, JToken responsePayload)
+    {
+        try
+        {
+            _logger.LogDebug("Processing GetConfiguration response for {ChargeBoxId}. Payload: {Payload}", 
+                station.ChargeBoxId, responsePayload.ToString());
+            
+            // Configure JSON settings for deserialization
+            var jsonSettings = new JsonSerializerSettings
+            {
+                NullValueHandling = NullValueHandling.Ignore,
+                ContractResolver = new CamelCasePropertyNamesContractResolver()
+            };
+            
+            var response = responsePayload.ToObject<GetConfigurationResponse>(JsonSerializer.Create(jsonSettings));
+            
+            if (response == null)
+            {
+                _logger.LogWarning("GetConfiguration response for {ChargeBoxId} is null", station.ChargeBoxId);
+                return;
+            }
+            
+            _logger.LogInformation("GetConfiguration response for {ChargeBoxId}: {Count} keys, UnknownKeys: {UnknownKeys}", 
+                station.ChargeBoxId, 
+                response.ConfigurationKey?.Count ?? 0,
+                response.UnknownKey != null ? string.Join(", ", response.UnknownKey) : "none");
+            
+            if (response.ConfigurationKey != null && response.ConfigurationKey.Any())
+            {
+                var configJson = JsonConvert.SerializeObject(response.ConfigurationKey, jsonSettings);
+                station.ConfigurationJson = configJson;
+                station.LastConfigurationUpdate = DateTime.UtcNow;
+                await context.SaveChangesAsync();
+                
+                _logger.LogInformation("Successfully stored configuration for {ChargeBoxId}: {Count} keys", 
+                    station.ChargeBoxId, response.ConfigurationKey.Count);
+            }
+            else
+            {
+                _logger.LogWarning("GetConfiguration response for {ChargeBoxId} contains no configuration keys. " +
+                    "This might be normal if the station has no configuration or uses a different format.", 
+                    station.ChargeBoxId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to process GetConfiguration response for {ChargeBoxId}. Error: {Error}", 
+                station.ChargeBoxId, ex.Message);
+        }
+    }
+    
+    private async Task HandleGetDiagnosticsResponseAsync(ApplicationDbContext context, ChargingStation station, JToken responsePayload)
+    {
+        try
+        {
+            // Configure JSON settings for deserialization
+            var jsonSettings = new JsonSerializerSettings
+            {
+                NullValueHandling = NullValueHandling.Ignore,
+                ContractResolver = new CamelCasePropertyNamesContractResolver()
+            };
+            
+            var response = responsePayload.ToObject<GetDiagnosticsResponse>(JsonSerializer.Create(jsonSettings));
+            if (response != null)
+            {
+                // Find the most recent diagnostics request for this station
+                var diagnostics = await context.ChargingStationDiagnostics
+                    .Where(d => d.ChargingStationId == station.Id)
+                    .OrderByDescending(d => d.RequestedAt)
+                    .FirstOrDefaultAsync();
+                    
+                if (diagnostics != null)
+                {
+                    diagnostics.FileName = response.FileName;
+                    if (response.FileName != null)
+                    {
+                        diagnostics.CompletedAt = DateTime.UtcNow;
+                        diagnostics.Status = DiagnosticsStatus.Completed;
+                    }
+                    else
+                    {
+                        diagnostics.Status = DiagnosticsStatus.Pending;
+                    }
+                    await context.SaveChangesAsync();
+                    
+                    _logger.LogInformation("Updated diagnostics status for {ChargeBoxId}: FileName={FileName}, Status={Status}", 
+                        station.ChargeBoxId, response.FileName, diagnostics.Status);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to process GetDiagnostics response for {ChargeBoxId}", station.ChargeBoxId);
+        }
     }
 
     private async Task UpdateStationStatusOnDisconnectAsync(string chargeBoxId)
@@ -339,7 +498,7 @@ public class OcppWebSocketServer
             if (method != null)
             {
                 var task = method.Invoke(notificationService, new object[] { tenantId, stationId, status, message });
-                if (task is Task notifyTask)
+                if (task is Task notifyTask && notifyTask != null)
                 {
                     await notifyTask;
                     _logger.LogInformation("Sent station status notification: StationId={StationId}, Status={Status}", stationId, status);

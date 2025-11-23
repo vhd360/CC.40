@@ -31,6 +31,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<ChargingStationGroup> ChargingStationGroups { get; set; }
     public DbSet<ChargingStationGroupMembership> ChargingStationGroupMemberships { get; set; }
     public DbSet<UserGroupChargingStationGroupPermission> UserGroupChargingStationGroupPermissions { get; set; }
+    public DbSet<ChargingStationDiagnostics> ChargingStationDiagnostics { get; set; }
+    public DbSet<ChargingStationFirmwareHistory> ChargingStationFirmwareHistory { get; set; }
 
     // Charging Sessions
     public DbSet<ChargingSession> ChargingSessions { get; set; }

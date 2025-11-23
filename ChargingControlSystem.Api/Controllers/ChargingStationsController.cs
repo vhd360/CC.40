@@ -4,6 +4,10 @@ using ChargingControlSystem.Data;
 using ChargingControlSystem.Data.Entities;
 using Swashbuckle.AspNetCore.Annotations;
 using Microsoft.AspNetCore.Authorization;
+using ChargingControlSystem.Api.Services;
+using ChargingControlSystem.OCPP.Models;
+using Newtonsoft.Json;
+using Microsoft.Extensions.Logging;
 
 namespace ChargingControlSystem.Api.Controllers;
 
@@ -18,10 +22,17 @@ namespace ChargingControlSystem.Api.Controllers;
 public class ChargingStationsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
+    private readonly IOcppCommandService _ocppCommandService;
+    private readonly ILogger<ChargingStationsController> _logger;
 
-    public ChargingStationsController(ApplicationDbContext context)
+    public ChargingStationsController(
+        ApplicationDbContext context, 
+        IOcppCommandService ocppCommandService,
+        ILogger<ChargingStationsController> logger)
     {
         _context = context;
+        _ocppCommandService = ocppCommandService;
+        _logger = logger;
     }
 
     /// <summary>
@@ -297,6 +308,228 @@ public class ChargingStationsController : ControllerBase
 
         return NoContent();
     }
+
+    /// <summary>
+    /// Konfiguration einer Ladesäule abrufen
+    /// </summary>
+    [HttpGet("{id}/configuration")]
+    [SwaggerOperation(Summary = "Konfiguration abrufen", OperationId = "GetStationConfiguration")]
+    public async Task<ActionResult<GetConfigurationResponse>> GetConfiguration(Guid id)
+    {
+        var station = await _context.ChargingStations
+            .Include(s => s.ChargingPark)
+            .FirstOrDefaultAsync(s => s.Id == id);
+
+        if (station == null || station.ChargingPark.TenantId != GetCurrentTenantId())
+            return NotFound();
+
+        if (string.IsNullOrEmpty(station.ChargeBoxId))
+            return BadRequest(new { error = "Station hat keine ChargeBoxId. Bitte konfigurieren Sie die OCPP-Verbindung für diese Station." });
+
+        // Request configuration from station
+        var previousUpdateTime = station.LastConfigurationUpdate;
+        try
+        {
+            await _ocppCommandService.GetConfigurationAsync(station.ChargeBoxId);
+            
+            // Wait a bit for the response to arrive and be processed (max 3 seconds)
+            var maxWaitTime = TimeSpan.FromSeconds(3);
+            var checkInterval = TimeSpan.FromMilliseconds(200);
+            var waited = TimeSpan.Zero;
+            
+            while (waited < maxWaitTime)
+            {
+                await Task.Delay(checkInterval);
+                waited += checkInterval;
+                
+                // Reload station to check if configuration was updated
+                await _context.Entry(station).ReloadAsync();
+                
+                if (station.LastConfigurationUpdate > previousUpdateTime)
+                {
+                    _logger.LogInformation("Configuration received for {ChargeBoxId} after {WaitTime}ms", 
+                        station.ChargeBoxId, waited.TotalMilliseconds);
+                    break;
+                }
+            }
+            
+            if (waited >= maxWaitTime)
+            {
+                _logger.LogWarning("Timeout waiting for GetConfiguration response from {ChargeBoxId}", station.ChargeBoxId);
+            }
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("No active connection"))
+        {
+            // Station is not connected - return stored configuration if available
+            _logger.LogWarning("Station {ChargeBoxId} is not connected. Returning stored configuration.", station.ChargeBoxId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending GetConfiguration to station {ChargeBoxId}", station.ChargeBoxId);
+            return BadRequest(new { error = $"Fehler beim Senden des GetConfiguration-Commands: {ex.Message}" });
+        }
+
+        // Return stored configuration (may have been updated by the response handler)
+        var configurationKeys = new List<ConfigurationKey>();
+        if (!string.IsNullOrEmpty(station.ConfigurationJson))
+        {
+            try
+            {
+                var storedConfig = JsonConvert.DeserializeObject<List<ConfigurationKey>>(station.ConfigurationJson);
+                if (storedConfig != null)
+                {
+                    configurationKeys = storedConfig;
+                }
+            }
+            catch
+            {
+                // Ignore deserialization errors
+            }
+        }
+
+        return Ok(new GetConfigurationResponse
+        {
+            ConfigurationKey = configurationKeys,
+            UnknownKey = null
+        });
+    }
+
+    /// <summary>
+    /// Konfiguration einer Ladesäule ändern
+    /// </summary>
+    [HttpPost("{id}/configuration")]
+    [SwaggerOperation(Summary = "Konfiguration ändern", OperationId = "ChangeStationConfiguration")]
+    public async Task<ActionResult<ChangeConfigurationResponse>> ChangeConfiguration(
+        Guid id, 
+        [FromBody] ChangeConfigurationRequest request)
+    {
+        var station = await _context.ChargingStations
+            .Include(s => s.ChargingPark)
+            .FirstOrDefaultAsync(s => s.Id == id);
+
+        if (station == null || station.ChargingPark.TenantId != GetCurrentTenantId())
+            return NotFound();
+
+        if (string.IsNullOrEmpty(station.ChargeBoxId))
+            return BadRequest("Station hat keine ChargeBoxId");
+
+        try
+        {
+            var response = await _ocppCommandService.ChangeConfigurationAsync(
+                station.ChargeBoxId, 
+                request.Key, 
+                request.Value);
+            
+            return Ok(response);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest($"Fehler beim Senden des ChangeConfiguration-Commands: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Diagnoseinformationen anfordern
+    /// </summary>
+    [HttpPost("{id}/diagnostics")]
+    [SwaggerOperation(Summary = "Diagnoseinformationen anfordern", OperationId = "RequestStationDiagnostics")]
+    public async Task<ActionResult<GetDiagnosticsResponse>> RequestDiagnostics(
+        Guid id,
+        [FromBody] RequestDiagnosticsDto request)
+    {
+        var station = await _context.ChargingStations
+            .Include(s => s.ChargingPark)
+            .FirstOrDefaultAsync(s => s.Id == id);
+
+        if (station == null || station.ChargingPark.TenantId != GetCurrentTenantId())
+            return NotFound();
+
+        if (string.IsNullOrEmpty(station.ChargeBoxId))
+            return BadRequest("Station hat keine ChargeBoxId");
+
+        try
+        {
+            var response = await _ocppCommandService.RequestDiagnosticsAsync(
+                station.ChargeBoxId,
+                request.Location,
+                request.StartTime,
+                request.StopTime);
+            
+            return Ok(response);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest($"Fehler beim Senden des GetDiagnostics-Commands: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Firmware-Historie abrufen
+    /// </summary>
+    [HttpGet("{id}/firmware-history")]
+    [SwaggerOperation(Summary = "Firmware-Historie abrufen", OperationId = "GetFirmwareHistory")]
+    public async Task<ActionResult<List<FirmwareHistoryDto>>> GetFirmwareHistory(Guid id)
+    {
+        var station = await _context.ChargingStations
+            .Include(s => s.ChargingPark)
+            .FirstOrDefaultAsync(s => s.Id == id);
+
+        if (station == null || station.ChargingPark.TenantId != GetCurrentTenantId())
+            return NotFound();
+
+        var history = await _context.ChargingStationFirmwareHistory
+            .Where(h => h.ChargingStationId == id)
+            .OrderByDescending(h => h.Timestamp)
+            .Select(h => new FirmwareHistoryDto(
+                h.Id,
+                h.FirmwareVersion,
+                h.Status,
+                h.Info,
+                h.Timestamp
+            ))
+            .ToListAsync();
+
+        return Ok(history);
+    }
+
+    /// <summary>
+    /// Diagnose-Historie abrufen
+    /// </summary>
+    [HttpGet("{id}/diagnostics-history")]
+    [SwaggerOperation(Summary = "Diagnose-Historie abrufen", OperationId = "GetDiagnosticsHistory")]
+    public async Task<ActionResult<List<DiagnosticsHistoryDto>>> GetDiagnosticsHistory(Guid id)
+    {
+        var station = await _context.ChargingStations
+            .Include(s => s.ChargingPark)
+            .FirstOrDefaultAsync(s => s.Id == id);
+
+        if (station == null || station.ChargingPark.TenantId != GetCurrentTenantId())
+            return NotFound();
+
+        var history = await _context.ChargingStationDiagnostics
+            .Where(d => d.ChargingStationId == id)
+            .OrderByDescending(d => d.RequestedAt)
+            .Select(d => new DiagnosticsHistoryDto(
+                d.Id,
+                d.RequestedAt,
+                d.CompletedAt,
+                d.Status,
+                d.FileName,
+                d.DiagnosticsUrl,
+                d.ErrorMessage,
+                d.StartTime,
+                d.StopTime
+            ))
+            .ToListAsync();
+
+        return Ok(history);
+    }
+
+    private Guid GetCurrentTenantId()
+    {
+        var tenantIdClaim = User.FindFirst("TenantId")?.Value;
+        return Guid.Parse(tenantIdClaim ?? throw new UnauthorizedAccessException("TenantId not found"));
+    }
 }
 
 public record CreateChargingStationDto(
@@ -334,4 +567,30 @@ public record UpdateChargingStationDto(
     string? OcppProtocol,
     string? OcppEndpoint,
     bool IsActive
+);
+
+public record RequestDiagnosticsDto(
+    string Location,
+    DateTime? StartTime = null,
+    DateTime? StopTime = null
+);
+
+public record FirmwareHistoryDto(
+    Guid Id,
+    string FirmwareVersion,
+    string Status,
+    string? Info,
+    DateTime Timestamp
+);
+
+public record DiagnosticsHistoryDto(
+    Guid Id,
+    DateTime RequestedAt,
+    DateTime? CompletedAt,
+    string Status,
+    string? FileName,
+    string? DiagnosticsUrl,
+    string? ErrorMessage,
+    DateTime? StartTime,
+    DateTime? StopTime
 );
