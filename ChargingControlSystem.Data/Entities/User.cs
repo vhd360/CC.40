@@ -46,6 +46,11 @@ public class User
 
     public DateTime? LastLoginAt { get; set; }
 
+    [MaxLength(500)]
+    public string? RefreshToken { get; set; }
+
+    public DateTime? RefreshTokenExpiresAt { get; set; }
+
     // Navigation properties
     public virtual Tenant Tenant { get; set; } = null!;
 

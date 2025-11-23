@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.WebSockets;
@@ -29,7 +30,7 @@ public class OcppWebSocketServer
     public OcppWebSocketServer(
         IServiceProvider serviceProvider,
         ILogger<OcppWebSocketServer> logger,
-        string prefix = "http://localhost:9000/ocpp/")
+        string prefix = "http://+:9000/ocpp/")
     {
         _logger = logger;
         _serviceProvider = serviceProvider;
@@ -273,20 +274,82 @@ public class OcppWebSocketServer
             using var context = await contextFactory.CreateDbContextAsync();
 
             var station = await context.ChargingStations
+                .Include(s => s.ChargingPark)
                 .FirstOrDefaultAsync(s => s.ChargeBoxId == chargeBoxId);
 
             if (station != null)
             {
+                var previousStatus = station.Status;
                 station.Status = ChargingStationStatus.Unavailable;
                 station.LastHeartbeat = null; // Clear last heartbeat when disconnected
                 await context.SaveChangesAsync();
                 
-                _logger.LogInformation("Set station {ChargeBoxId} status to Unavailable (WebSocket disconnected)", chargeBoxId);
+                _logger.LogInformation("Set station {ChargeBoxId} (ID: {StationId}) status to Unavailable (WebSocket disconnected)", 
+                    chargeBoxId, station.Id);
+
+                // Send SignalR notification if status changed
+                if (previousStatus != ChargingStationStatus.Unavailable)
+                {
+                    _logger.LogInformation("Sending SignalR notification: TenantId={TenantId}, StationId={StationId}, Status=Unavailable", 
+                        station.ChargingPark.TenantId, station.Id);
+                    await NotifyStationStatusChangedAsync(station.ChargingPark.TenantId, station.Id, "Unavailable", "Station disconnected from OCPP server");
+                }
+                else
+                {
+                    _logger.LogDebug("Station {StationId} was already Unavailable, skipping notification", station.Id);
+                }
+            }
+            else
+            {
+                _logger.LogWarning("Station with ChargeBoxId {ChargeBoxId} not found in database", chargeBoxId);
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to update station status for {ChargeBoxId} on disconnect", chargeBoxId);
+        }
+    }
+
+    /// <summary>
+    /// Notify clients about station status change (via SignalR)
+    /// </summary>
+    private async Task NotifyStationStatusChangedAsync(Guid tenantId, Guid stationId, string status, string? message = null)
+    {
+        try
+        {
+            using var scope = _serviceProvider.CreateScope();
+            
+            // Use reflection to get INotificationService to avoid hard dependency on Api project
+            var notificationServiceType = Type.GetType("ChargingControlSystem.Api.Services.INotificationService, ChargingControlSystem.Api");
+            if (notificationServiceType == null)
+            {
+                _logger.LogWarning("INotificationService type not found, skipping notification");
+                return;
+            }
+
+            var notificationService = scope.ServiceProvider.GetService(notificationServiceType);
+            if (notificationService == null)
+            {
+                _logger.LogWarning("INotificationService not found in service provider, skipping notification");
+                return;
+            }
+
+            // Call NotifyStationStatusChangedAsync via reflection
+            var method = notificationServiceType.GetMethod("NotifyStationStatusChangedAsync");
+            if (method != null)
+            {
+                var task = method.Invoke(notificationService, new object[] { tenantId, stationId, status, message });
+                if (task is Task notifyTask)
+                {
+                    await notifyTask;
+                    _logger.LogInformation("Sent station status notification: StationId={StationId}, Status={Status}", stationId, status);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send station status notification for station {StationId}", stationId);
+            // Don't throw - notification should not block the disconnect process
         }
     }
 

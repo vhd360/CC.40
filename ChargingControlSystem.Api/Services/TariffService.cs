@@ -35,17 +35,16 @@ public class TariffService : ITariffService
         using var context = await _contextFactory.CreateDbContextAsync();
 
         // Load related entities if not already loaded
-        if (session.ChargingConnector == null)
+        if (session.ChargingPoint == null)
         {
             await context.Entry(session)
-                .Reference(s => s.ChargingConnector)
+                .Reference(s => s.ChargingPoint)
                 .Query()
-                .Include(c => c.ChargingPoint)
-                    .ThenInclude(cp => cp.ChargingStation)
+                .Include(cp => cp.ChargingStation)
                 .LoadAsync();
         }
 
-        var stationId = session.ChargingConnector?.ChargingPoint?.ChargingStation?.Id;
+        var stationId = session.ChargingPoint?.ChargingStation?.Id;
         if (!stationId.HasValue)
         {
             throw new InvalidOperationException("Cannot calculate cost without charging station information");

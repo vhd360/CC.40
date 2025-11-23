@@ -3,7 +3,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Upload, X } from 'lucide-react';
+import { X } from 'lucide-react';
 
 interface ChargingPointFormProps {
   chargingStationId: string;
@@ -20,6 +20,14 @@ export interface ChargingPointFormData {
   description?: string;
   maxPower: number;
   status: number;
+  // Connector-Eigenschaften (jetzt Teil von ChargingPoint)
+  connectorType?: string;
+  connectorFormat?: string;
+  powerType?: string;
+  maxCurrent?: number;
+  maxVoltage?: number;
+  physicalReference?: string;
+  // Funktionen
   supportsSmartCharging: boolean;
   supportsRemoteStartStop: boolean;
   supportsReservation: boolean;
@@ -43,6 +51,14 @@ export const ChargingPointForm: React.FC<ChargingPointFormProps> = ({
     description: chargingPoint?.description || '',
     maxPower: chargingPoint?.maxPower || 22,
     status: chargingPoint?.status || 0,
+    // Connector-Eigenschaften
+    connectorType: chargingPoint?.connectorType || 'Type2',
+    connectorFormat: chargingPoint?.connectorFormat || 'SOCKET',
+    powerType: chargingPoint?.powerType || 'AC_3_PHASE',
+    maxCurrent: chargingPoint?.maxCurrent || 32,
+    maxVoltage: chargingPoint?.maxVoltage || 230,
+    physicalReference: chargingPoint?.physicalReference || '',
+    // Funktionen
     supportsSmartCharging: chargingPoint?.supportsSmartCharging || false,
     supportsRemoteStartStop: chargingPoint?.supportsRemoteStartStop || true,
     supportsReservation: chargingPoint?.supportsReservation || false,
@@ -79,7 +95,7 @@ export const ChargingPointForm: React.FC<ChargingPointFormProps> = ({
           {chargingPoint ? 'Ladepunkt bearbeiten' : 'Neuen Ladepunkt anlegen'}
         </CardTitle>
         <CardDescription>
-          Ein Ladepunkt (EVSE) entspricht einem OCPP ConnectorId und kann mehrere physische Stecker haben
+          Ein Ladepunkt (EVSE) entspricht einem OCPP ConnectorId und hat genau einen physischen Stecker
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -171,6 +187,93 @@ export const ChargingPointForm: React.FC<ChargingPointFormProps> = ({
                   <option value="6">Vorbereitung</option>
                   <option value="7">Abschluss</option>
                 </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Connector-Eigenschaften */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium">Stecker-Eigenschaften</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="connectorType">Steckertyp *</Label>
+                <select
+                  id="connectorType"
+                  value={formData.connectorType}
+                  onChange={(e) => setFormData({ ...formData, connectorType: e.target.value })}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2"
+                  required
+                >
+                  <option value="Type1">Type1</option>
+                  <option value="Type2">Type2</option>
+                  <option value="CCS">CCS</option>
+                  <option value="CHAdeMO">CHAdeMO</option>
+                  <option value="Tesla">Tesla</option>
+                  <option value="Schuko">Schuko</option>
+                  <option value="CEE">CEE</option>
+                  <option value="GB/T">GB/T</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="connectorFormat">Stecker-Format</Label>
+                <select
+                  id="connectorFormat"
+                  value={formData.connectorFormat}
+                  onChange={(e) => setFormData({ ...formData, connectorFormat: e.target.value })}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2"
+                >
+                  <option value="SOCKET">Steckdose</option>
+                  <option value="CABLE">Fest montiertes Kabel</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="powerType">Stromart</Label>
+                <select
+                  id="powerType"
+                  value={formData.powerType}
+                  onChange={(e) => setFormData({ ...formData, powerType: e.target.value })}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2"
+                >
+                  <option value="AC_1_PHASE">AC 1-phasig</option>
+                  <option value="AC_3_PHASE">AC 3-phasig</option>
+                  <option value="DC">DC Gleichstrom</option>
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="maxCurrent">Max. Stromstärke (A)</Label>
+                <Input
+                  id="maxCurrent"
+                  type="number"
+                  min="0"
+                  value={formData.maxCurrent}
+                  onChange={(e) => setFormData({ ...formData, maxCurrent: parseInt(e.target.value) || 32 })}
+                  placeholder="32"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="maxVoltage">Max. Spannung (V)</Label>
+                <Input
+                  id="maxVoltage"
+                  type="number"
+                  min="0"
+                  value={formData.maxVoltage}
+                  onChange={(e) => setFormData({ ...formData, maxVoltage: parseInt(e.target.value) || 230 })}
+                  placeholder="230"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="physicalReference">Physische Referenz</Label>
+                <Input
+                  id="physicalReference"
+                  value={formData.physicalReference}
+                  onChange={(e) => setFormData({ ...formData, physicalReference: e.target.value })}
+                  placeholder="z.B. Linke Seite, Position A"
+                />
               </div>
             </div>
           </div>

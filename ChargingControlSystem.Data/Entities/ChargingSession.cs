@@ -12,7 +12,7 @@ public class ChargingSession
     public Guid TenantId { get; set; }
 
     [Required]
-    public Guid ChargingConnectorId { get; set; }
+    public Guid ChargingPointId { get; set; }
 
     public Guid? UserId { get; set; } // null für Adhoc-Ladung
 
@@ -53,7 +53,7 @@ public class ChargingSession
 
     // Navigation properties
     public virtual Tenant Tenant { get; set; } = null!;
-    public virtual ChargingConnector ChargingConnector { get; set; } = null!;
+    public virtual ChargingPoint ChargingPoint { get; set; } = null!;
     public virtual User? User { get; set; }
     public virtual Vehicle? Vehicle { get; set; }
     public virtual QrCode? QrCode { get; set; }

@@ -36,10 +36,9 @@ public class InvoicePdfService : IInvoicePdfService
         var transaction = await context.BillingTransactions
             .Include(t => t.BillingAccount)
             .Include(t => t.ChargingSession)
-                .ThenInclude(s => s!.ChargingConnector)
-                    .ThenInclude(c => c.ChargingPoint)
-                        .ThenInclude(cp => cp.ChargingStation)
-                            .ThenInclude(cs => cs.ChargingPark)
+                .ThenInclude(s => s!.ChargingPoint)
+                    .ThenInclude(cp => cp.ChargingStation)
+                        .ThenInclude(cs => cs.ChargingPark)
             .Include(t => t.ChargingSession)
                 .ThenInclude(s => s!.Vehicle)
             .Include(t => t.ChargingSession)
@@ -101,7 +100,7 @@ public class InvoicePdfService : IInvoicePdfService
                         if (transaction.ChargingSession != null)
                         {
                             var session = transaction.ChargingSession;
-                            var station = session.ChargingConnector?.ChargingPoint?.ChargingStation;
+                            var station = session.ChargingPoint?.ChargingStation;
                             var park = station?.ChargingPark;
 
                             col.Item().Table(table =>
@@ -224,9 +223,8 @@ public class InvoicePdfService : IInvoicePdfService
         var transactions = await context.BillingTransactions
             .Include(t => t.BillingAccount)
             .Include(t => t.ChargingSession)
-                .ThenInclude(s => s!.ChargingConnector)
-                    .ThenInclude(c => c.ChargingPoint)
-                        .ThenInclude(cp => cp.ChargingStation)
+                .ThenInclude(s => s!.ChargingPoint)
+                    .ThenInclude(cp => cp.ChargingStation)
             .Where(t => t.ChargingSession!.UserId == userId &&
                        t.CreatedAt >= startDate &&
                        t.CreatedAt < endDate)
@@ -302,7 +300,7 @@ public class InvoicePdfService : IInvoicePdfService
                             foreach (var t in transactions)
                             {
                                 table.Cell().Padding(5).Text(t.CreatedAt.ToString("dd.MM.yy"));
-                                table.Cell().Padding(5).Text(t.ChargingSession?.ChargingConnector?.ChargingPoint?.ChargingStation?.Name ?? "N/A");
+                                table.Cell().Padding(5).Text(t.ChargingSession?.ChargingPoint?.ChargingStation?.Name ?? "N/A");
                                 table.Cell().Padding(5).Text($"{t.ChargingSession?.EnergyDelivered:F1} kWh");
                                 table.Cell().Padding(5).Text($"{t.Amount:F2} €");
                                 table.Cell().Padding(5).Text(t.Status == BillingTransactionStatus.Completed ? "Bezahlt" : "Offen");

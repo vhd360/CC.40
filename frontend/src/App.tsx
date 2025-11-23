@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { SignalRProvider } from './contexts/SignalRContext';
+import { ToastProvider } from './components/ui/toast';
 import { AdminLayout } from './components/AdminLayout';
 import { UserLayout } from './components/UserLayout';
 import { Login } from './pages/Login';
@@ -101,7 +102,8 @@ function App() {
   return (
     <Router>
       <SignalRProvider>
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+        <ToastProvider>
+          <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
           <Routes>
             {/* Public routes */}
           <Route path="/register" element={<TenantRegister />} />
@@ -169,7 +171,8 @@ function App() {
             } 
           />
         </Routes>
-      </div>
+          </div>
+        </ToastProvider>
       </SignalRProvider>
     </Router>
   );

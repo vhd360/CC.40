@@ -28,7 +28,6 @@ public class ApplicationDbContext : DbContext
     public DbSet<ChargingPark> ChargingParks { get; set; }
     public DbSet<ChargingStation> ChargingStations { get; set; }
     public DbSet<ChargingPoint> ChargingPoints { get; set; }
-    public DbSet<ChargingConnector> ChargingConnectors { get; set; }
     public DbSet<ChargingStationGroup> ChargingStationGroups { get; set; }
     public DbSet<ChargingStationGroupMembership> ChargingStationGroupMemberships { get; set; }
     public DbSet<UserGroupChargingStationGroupPermission> UserGroupChargingStationGroupPermissions { get; set; }
@@ -158,9 +157,9 @@ public class ApplicationDbContext : DbContext
             .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<ChargingSession>()
-            .HasOne(cs => cs.ChargingConnector)
-            .WithMany(cc => cc.ChargingSessions)
-            .HasForeignKey(cs => cs.ChargingConnectorId)
+            .HasOne(cs => cs.ChargingPoint)
+            .WithMany(cp => cp.ChargingSessions)
+            .HasForeignKey(cs => cs.ChargingPointId)
             .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<ChargingSession>()
@@ -532,6 +531,11 @@ public class ApplicationDbContext : DbContext
                 EvseId = 1,
                 Name = "Ladepunkt 1",
                 MaxPower = 150,
+                ConnectorType = "CCS",
+                ConnectorFormat = "SOCKET",
+                PowerType = "DC",
+                MaxCurrent = 200,
+                MaxVoltage = 800,
                 Status = ChargingPointStatus.Available,
                 SupportsSmartCharging = true,
                 SupportsRemoteStartStop = true,
@@ -545,6 +549,11 @@ public class ApplicationDbContext : DbContext
                 EvseId = 2,
                 Name = "Ladepunkt 2",
                 MaxPower = 150,
+                ConnectorType = "CCS",
+                ConnectorFormat = "SOCKET",
+                PowerType = "DC",
+                MaxCurrent = 200,
+                MaxVoltage = 800,
                 Status = ChargingPointStatus.Available,
                 SupportsSmartCharging = true,
                 SupportsRemoteStartStop = true,
@@ -553,37 +562,8 @@ public class ApplicationDbContext : DbContext
             }
         );
 
-        // Seed Charging Connectors
-        modelBuilder.Entity<ChargingConnector>().HasData(
-            new ChargingConnector
-            {
-                Id = Guid.Parse("aaaa8888-8888-8888-8888-888888888888"),
-                ChargingPointId = chargingPoint1Id,
-                ConnectorId = 1,
-                ConnectorType = "CCS",
-                PowerType = "DC",
-                MaxPower = 150,
-                MaxCurrent = 200,
-                MaxVoltage = 800,
-                Status = Entities.ConnectorStatus.Available,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow.AddDays(-20)
-            },
-            new ChargingConnector
-            {
-                Id = Guid.Parse("aaaa9999-9999-9999-9999-999999999999"),
-                ChargingPointId = chargingPoint2Id,
-                ConnectorId = 1,
-                ConnectorType = "CCS",
-                PowerType = "DC",
-                MaxPower = 150,
-                MaxCurrent = 200,
-                MaxVoltage = 800,
-                Status = Entities.ConnectorStatus.Available,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow.AddDays(-20)
-            }
-        );
+        // ChargingPoints haben jetzt alle Connector-Eigenschaften direkt
+        // Seed-Daten werden in ChargingPoint-Seeding aktualisiert
 
         // Seed Vehicles
         modelBuilder.Entity<Vehicle>().HasData(

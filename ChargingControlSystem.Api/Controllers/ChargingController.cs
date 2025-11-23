@@ -2,6 +2,7 @@ using ChargingControlSystem.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
+using Microsoft.Extensions.Logging;
 
 namespace ChargingControlSystem.Api.Controllers;
 
@@ -69,7 +70,7 @@ public class ChargingController : ControllerBase
     /// <summary>
     /// Ladevorgang starten
     /// </summary>
-    /// <param name="connectorId">ID des Konnektors</param>
+    /// <param name="chargingPointId">ID des Ladepunkts</param>
     /// <param name="vehicleId">ID des Fahrzeugs (optional)</param>
     /// <returns>Neue Lade-Session</returns>
     /// <remarks>
@@ -93,7 +94,7 @@ public class ChargingController : ControllerBase
     /// <response code="200">Ladevorgang erfolgreich gestartet</response>
     /// <response code="400">Konnektor nicht verfügbar oder ungültig</response>
     /// <response code="403">Keine Berechtigung für diese Ladesäule</response>
-    [HttpPost("start/{connectorId}")]
+    [HttpPost("start/{chargingPointId}")]
     [SwaggerOperation(
         Summary = "Ladevorgang starten",
         Description = "Startet einen neuen Ladevorgang an einem bestimmten Konnektor.",
@@ -103,13 +104,13 @@ public class ChargingController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> StartCharging(Guid connectorId, [FromQuery] Guid? vehicleId)
+    public async Task<IActionResult> StartCharging(Guid chargingPointId, [FromQuery] Guid? vehicleId)
     {
         // Get user ID from JWT token
         var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
         Guid? userId = userIdClaim != null ? Guid.Parse(userIdClaim.Value) : null;
 
-        var session = await _chargingService.StartChargingSessionAsync(connectorId, userId, vehicleId);
+        var session = await _chargingService.StartChargingSessionAsync(chargingPointId, userId, vehicleId);
         
         // Return DTO to avoid circular reference issues
         return Ok(new
@@ -117,7 +118,7 @@ public class ChargingController : ControllerBase
             session.Id,
             session.SessionId,
             session.StartedAt,
-            session.ChargingConnectorId,
+            session.ChargingPointId,
             session.UserId,
             session.VehicleId,
             Status = session.Status.ToString()
@@ -221,7 +222,7 @@ public class ChargingController : ControllerBase
             s.Id,
             User = s.User != null ? $"{s.User.FirstName} {s.User.LastName}" : "Adhoc-Nutzer",
             Vehicle = s.Vehicle != null ? $"{s.Vehicle.Make} {s.Vehicle.Model}" : "Unbekannt",
-            Station = s.ChargingConnector.ChargingPoint.ChargingStation.Name,
+            Station = s.ChargingPoint.ChargingStation.Name,
             Duration = s.EndedAt.HasValue 
                 ? $"{(int)(s.EndedAt.Value - s.StartedAt).TotalMinutes} min" 
                 : "Läuft...",
@@ -269,28 +270,35 @@ public class ChargingController : ControllerBase
     public async Task<IActionResult> GetStationConnectors(Guid stationId)
     {
         var connectors = await _chargingService.GetStationConnectorsAsync(stationId);
+        
+        // Debug-Logging
+        var logger = HttpContext.RequestServices.GetRequiredService<ILogger<ChargingController>>();
+        logger.LogInformation(
+            "GetStationConnectors: StationId={StationId}, Found {Count} connectors", 
+            stationId, connectors.Count());
+        
         return Ok(connectors);
     }
 
     /// <summary>
-    /// Connector-Status zurücksetzen (Admin)
+    /// Ladepunkt-Status zurücksetzen (Admin)
     /// </summary>
-    [HttpPost("connectors/{connectorId}/reset")]
+    [HttpPost("charging-points/{chargingPointId}/reset")]
     [SwaggerOperation(
-        Summary = "Connector-Status zurücksetzen",
-        Description = "Setzt den Status eines blockierten Connectors auf 'Available' zurück. Nur möglich, wenn keine aktive Session existiert.",
-        OperationId = "ResetConnectorStatus",
+        Summary = "Ladepunkt-Status zurücksetzen",
+        Description = "Setzt den Status eines blockierten Ladepunkts auf 'Available' zurück. Nur möglich, wenn keine aktive Session existiert.",
+        OperationId = "ResetChargingPointStatus",
         Tags = new[] { "Ladevorgänge" }
     )]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> ResetConnectorStatus(Guid connectorId)
+    public async Task<IActionResult> ResetChargingPointStatus(Guid chargingPointId)
     {
         try
         {
-            await _chargingService.ResetConnectorStatusAsync(connectorId);
-            return Ok(new { message = "Connector-Status erfolgreich zurückgesetzt" });
+            await _chargingService.ResetConnectorStatusAsync(chargingPointId);
+            return Ok(new { message = "Ladepunkt-Status erfolgreich zurückgesetzt" });
         }
         catch (InvalidOperationException ex)
         {

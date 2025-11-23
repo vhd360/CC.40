@@ -133,7 +133,6 @@ public class ChargingStationsController : ControllerBase
         var station = await _context.ChargingStations
             .Include(s => s.ChargingPark)
             .Include(s => s.ChargingPoints)
-                .ThenInclude(cp => cp.Connectors)
             .Where(s => s.Id == id && s.ChargingPark.TenantId == tenantId.Value)
             .Select(s => new
             {
@@ -168,19 +167,27 @@ public class ChargingStationsController : ControllerBase
                 {
                     cp.Id,
                     cp.EvseId,
+                    cp.EvseIdExternal,
                     cp.Name,
+                    cp.Description,
                     cp.MaxPower,
                     Status = cp.Status.ToString(),
-                    Connectors = cp.Connectors.Select(c => new
-                    {
-                        c.Id,
-                        c.ConnectorId,
-                        ConnectorType = c.ConnectorType.ToString(),
-                        Status = c.Status.ToString(),
-                        c.MaxPower,
-                        c.MaxCurrent,
-                        c.MaxVoltage
-                    }).ToList()
+                    ConnectorType = cp.ConnectorType,
+                    ConnectorFormat = cp.ConnectorFormat,
+                    PowerType = cp.PowerType,
+                    MaxCurrent = cp.MaxCurrent,
+                    MaxVoltage = cp.MaxVoltage,
+                    PhysicalReference = cp.PhysicalReference,
+                    SupportsSmartCharging = cp.SupportsSmartCharging,
+                    SupportsRemoteStartStop = cp.SupportsRemoteStartStop,
+                    SupportsReservation = cp.SupportsReservation,
+                    PublicKey = cp.PublicKey,
+                    CertificateChain = cp.CertificateChain,
+                    TariffInfo = cp.TariffInfo,
+                    Notes = cp.Notes,
+                    IsActive = cp.IsActive,
+                    CreatedAt = cp.CreatedAt,
+                    LastStatusChange = cp.LastStatusChange
                 }).ToList(),
                 Groups = _context.ChargingStationGroupMemberships
                     .Where(m => m.ChargingStationId == s.Id)

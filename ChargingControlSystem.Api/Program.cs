@@ -7,6 +7,8 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
 using System.Reflection;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,6 +18,8 @@ builder.Services.AddControllers()
     {
         // Prevent circular reference errors
         options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+        // Use camelCase for JSON property names (JavaScript/TypeScript convention)
+        options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
     });
 
 // Add SignalR for real-time notifications
@@ -142,7 +146,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true,
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Secret"]!))
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Secret"]!)),
+            // ClockSkew erlaubt eine kleine Toleranz für Zeitunterschiede zwischen Server und Client (Standard: 5 Minuten)
+            // Setze auf 0 für strikte Validierung, oder erhöhe für mehr Toleranz
+            ClockSkew = TimeSpan.FromMinutes(1), // 1 Minute Toleranz für Zeitunterschiede
+            // Erlaube SignalR-Verbindungen auch bei abgelaufenen Tokens (Hub entscheidet selbst)
+            RequireExpirationTime = false
         };
         
         // Support JWT authentication for SignalR
@@ -174,6 +183,38 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     }
                 }
                 
+                return Task.CompletedTask;
+            },
+            OnAuthenticationFailed = context =>
+            {
+                var path = context.HttpContext.Request.Path;
+                
+                // Für SignalR-Hubs: Fehler nicht als kritisch behandeln, wenn Hub nicht [Authorize] hat
+                if (path.StartsWithSegments("/hubs"))
+                {
+                    // Erlaube die Verbindung auch bei Authentifizierungsfehlern
+                    // Der Hub entscheidet selbst, ob Authentifizierung erforderlich ist
+                    context.NoResult();
+                    return Task.CompletedTask;
+                }
+                
+                var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+                logger.LogWarning("JWT Authentication failed: {Error}", context.Exception.Message);
+                return Task.CompletedTask;
+            },
+            OnChallenge = context =>
+            {
+                var path = context.HttpContext.Request.Path;
+                
+                // Für SignalR-Hubs: Keine Challenge senden, wenn Hub nicht [Authorize] hat
+                if (path.StartsWithSegments("/hubs"))
+                {
+                    context.HandleResponse();
+                    return Task.CompletedTask;
+                }
+                
+                var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+                logger.LogWarning("JWT Challenge triggered for path: {Path}", context.Request.Path);
                 return Task.CompletedTask;
             }
         };
@@ -215,6 +256,10 @@ builder.Services.AddSingleton<INotificationService, NotificationService>();
 builder.Services.AddSingleton<IDbContextFactory<ApplicationDbContext>>(sp =>
 {
     var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    if (string.IsNullOrEmpty(connectionString))
+    {
+        throw new InvalidOperationException("DefaultConnection connection string is not configured.");
+    }
     return new SimpleDbContextFactory(connectionString);
 });
 builder.Services.AddTransient<ChargingControlSystem.OCPP.Handlers.IOcppMessageHandler, ChargingControlSystem.OCPP.Handlers.OcppMessageHandler>();
@@ -303,6 +348,131 @@ app.MapGet("/health", () => Results.Ok(new
 // SignalR Hub für Echtzeit-Benachrichtigungen (mit CORS Policy)
 app.MapHub<ChargingControlSystem.Api.Hubs.NotificationHub>("/hubs/notifications")
     .RequireCors("AllowFrontend");
+
+// Frontend Development Server Starter (lokale Funktionen)
+void StartFrontendDevelopmentServer()
+{
+    try
+    {
+        var solutionPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
+        var frontendPath = Path.Combine(solutionPath, "frontend");
+        
+        if (!Directory.Exists(frontendPath))
+        {
+            Console.WriteLine("⚠️ Frontend-Verzeichnis nicht gefunden: " + frontendPath);
+            return;
+        }
+
+        // Prüfe, ob npm/node verfügbar ist
+        var nodeCheck = new ProcessStartInfo
+        {
+            FileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "node" : "node",
+            Arguments = "--version",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        try
+        {
+            using var nodeProcess = Process.Start(nodeCheck);
+            if (nodeProcess == null)
+            {
+                Console.WriteLine("⚠️ Node.js nicht gefunden. Frontend wird nicht automatisch gestartet.");
+                return;
+            }
+            nodeProcess.WaitForExit(2000);
+        }
+        catch
+        {
+            Console.WriteLine("⚠️ Node.js nicht gefunden. Frontend wird nicht automatisch gestartet.");
+            return;
+        }
+
+        // Starte npm start im Frontend-Verzeichnis
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "cmd.exe" : "/bin/bash",
+            Arguments = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) 
+                ? $"/c cd /d \"{frontendPath}\" && npm start" 
+                : $"-c \"cd '{frontendPath}' && npm start\"",
+            WorkingDirectory = frontendPath,
+            UseShellExecute = false,
+            CreateNoWindow = false,
+            RedirectStandardOutput = false,
+            RedirectStandardError = false
+        };
+
+        var frontendProcess = Process.Start(startInfo);
+        if (frontendProcess != null)
+        {
+            Console.WriteLine("✅ Frontend Development Server wird gestartet...");
+            Console.WriteLine($"📁 Frontend-Verzeichnis: {frontendPath}");
+            
+            // Warte kurz, dann öffne Browser
+            Task.Delay(5000).ContinueWith(_ =>
+            {
+                try
+                {
+                    var browserUrl = "http://localhost:3000";
+                    OpenBrowser(browserUrl);
+                    Console.WriteLine($"🌐 Browser geöffnet: {browserUrl}");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"⚠️ Browser konnte nicht automatisch geöffnet werden: {ex.Message}");
+                    Console.WriteLine("💡 Bitte öffnen Sie manuell: http://localhost:3000");
+                }
+            });
+        }
+        else
+        {
+            Console.WriteLine("⚠️ Frontend konnte nicht gestartet werden.");
+        }
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"⚠️ Fehler beim Starten des Frontend Development Servers: {ex.Message}");
+        Console.WriteLine("💡 Bitte starten Sie das Frontend manuell mit: cd frontend && npm start");
+    }
+}
+
+void OpenBrowser(string url)
+{
+    try
+    {
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? url
+                : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "open"
+                : "xdg-open",
+            Arguments = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? null : url,
+            UseShellExecute = true,
+            CreateNoWindow = true
+        });
+    }
+    catch
+    {
+        // Fallback: Versuche mit cmd/start auf Windows
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                Arguments = $"/c start {url}",
+                UseShellExecute = false,
+                CreateNoWindow = true
+            });
+        }
+    }
+}
+
+// Start Frontend automatisch im Development-Modus
+if (app.Environment.IsDevelopment())
+{
+    StartFrontendDevelopmentServer();
+}
 
 app.Run();
 

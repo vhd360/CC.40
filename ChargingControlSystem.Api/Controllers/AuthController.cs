@@ -136,7 +136,19 @@ public class AuthController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> RefreshToken([FromBody] string refreshToken)
     {
-        await _authService.RefreshTokenAsync(refreshToken);
-        return Ok();
+        var result = await _authService.RefreshTokenAsync(refreshToken);
+        
+        if (!result.Success)
+        {
+            return Unauthorized(new { message = result.Message });
+        }
+        
+        return Ok(result);
+    }
+}
+
+        }
+        
+        return Ok(result);
     }
 }

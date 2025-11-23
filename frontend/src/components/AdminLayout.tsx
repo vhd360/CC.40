@@ -129,9 +129,9 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ onLogout }) => {
 
       {/* Header */}
       <header className="bg-white dark:bg-gray-900 shadow-sm border-b dark:border-gray-800 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="w-full px-3 sm:px-4 lg:px-6">
           <div className="flex justify-between items-center py-4">
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-3 lg:space-x-4">
               <Button
                 variant="ghost"
                 size="sm"
@@ -140,7 +140,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ onLogout }) => {
               >
                 <Menu className="h-5 w-5" />
               </Button>
-              <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-2 lg:space-x-3">
                 {logoUrl ? (
                   <img src={`http://localhost:5126${logoUrl}`} alt={`${tenantName} Logo`} className="h-8 w-auto object-contain" />
                 ) : (
@@ -163,10 +163,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ onLogout }) => {
         </div>
       </header>
 
-      <div className="flex">
+      <div className="flex min-h-[calc(100vh-4rem)]">
         {/* Desktop sidebar */}
-        <div className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 lg:z-40">
-          <div className="flex flex-col flex-grow bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 pt-16">
+        <aside className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:left-0 lg:top-16 lg:bottom-0 lg:z-30">
+          <div className="flex flex-col flex-grow bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 overflow-y-auto">
             <div className="flex flex-col flex-grow px-4 py-6">
               <nav className="flex-1 space-y-2">
                 {navigation.map((item) => (
@@ -186,10 +186,10 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ onLogout }) => {
               </nav>
             </div>
           </div>
-        </div>
+        </aside>
 
         {/* Main content */}
-        <main className="flex-1 lg:ml-64">
+        <main className="flex-1 w-full lg:ml-64">
           <div className="py-6">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <Outlet />

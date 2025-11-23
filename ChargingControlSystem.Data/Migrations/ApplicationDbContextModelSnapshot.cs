@@ -110,7 +110,7 @@ namespace ChargingControlSystem.Data.Migrations
                         {
                             Id = new Guid("dddd1111-1111-1111-1111-111111111111"),
                             AccountName = "Hauptkonto ChargingControl GmbH",
-                            CreatedAt = new DateTime(2025, 10, 8, 12, 24, 19, 817, DateTimeKind.Utc).AddTicks(9421),
+                            CreatedAt = new DateTime(2025, 10, 24, 8, 52, 28, 192, DateTimeKind.Utc).AddTicks(481),
                             Status = 0,
                             TenantId = new Guid("11111111-1111-1111-1111-111111111111"),
                             Type = 1
@@ -167,97 +167,6 @@ namespace ChargingControlSystem.Data.Migrations
                     b.HasIndex("ChargingSessionId");
 
                     b.ToTable("BillingTransactions");
-                });
-
-            modelBuilder.Entity("ChargingControlSystem.Data.Entities.ChargingConnector", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid>("ChargingPointId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("ConnectorFormat")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<int>("ConnectorId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("ConnectorType")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<DateTime?>("LastStatusChange")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("MaxCurrent")
-                        .HasColumnType("int");
-
-                    b.Property<int>("MaxPower")
-                        .HasColumnType("int");
-
-                    b.Property<int>("MaxVoltage")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<string>("PhysicalReference")
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
-
-                    b.Property<string>("PowerType")
-                        .HasMaxLength(20)
-                        .HasColumnType("nvarchar(20)");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ChargingPointId");
-
-                    b.ToTable("ChargingConnectors");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = new Guid("aaaa8888-8888-8888-8888-888888888888"),
-                            ChargingPointId = new Guid("88888888-8888-8888-8888-888888888888"),
-                            ConnectorId = 1,
-                            ConnectorType = "CCS",
-                            CreatedAt = new DateTime(2025, 10, 18, 12, 24, 19, 817, DateTimeKind.Utc).AddTicks(9309),
-                            IsActive = true,
-                            MaxCurrent = 200,
-                            MaxPower = 150,
-                            MaxVoltage = 800,
-                            PowerType = "DC",
-                            Status = 0
-                        },
-                        new
-                        {
-                            Id = new Guid("aaaa9999-9999-9999-9999-999999999999"),
-                            ChargingPointId = new Guid("99999999-9999-9999-9999-999999999999"),
-                            ConnectorId = 1,
-                            ConnectorType = "CCS",
-                            CreatedAt = new DateTime(2025, 10, 18, 12, 24, 19, 817, DateTimeKind.Utc).AddTicks(9311),
-                            IsActive = true,
-                            MaxCurrent = 200,
-                            MaxPower = 150,
-                            MaxVoltage = 800,
-                            PowerType = "DC",
-                            Status = 0
-                        });
                 });
 
             modelBuilder.Entity("ChargingControlSystem.Data.Entities.ChargingPark", b =>
@@ -325,7 +234,7 @@ namespace ChargingControlSystem.Data.Migrations
                             Address = "Hauptstraße 123",
                             City = "München",
                             Country = "Deutschland",
-                            CreatedAt = new DateTime(2025, 10, 18, 12, 24, 19, 817, DateTimeKind.Utc).AddTicks(9208),
+                            CreatedAt = new DateTime(2025, 11, 3, 8, 52, 28, 192, DateTimeKind.Utc).AddTicks(311),
                             Description = "Zentraler Parkplatz am Hauptgebäude",
                             IsActive = true,
                             Latitude = 48.1351m,
@@ -340,7 +249,7 @@ namespace ChargingControlSystem.Data.Migrations
                             Address = "Friedrichstraße 45",
                             City = "Berlin",
                             Country = "Deutschland",
-                            CreatedAt = new DateTime(2025, 10, 23, 12, 24, 19, 817, DateTimeKind.Utc).AddTicks(9212),
+                            CreatedAt = new DateTime(2025, 11, 8, 8, 52, 28, 192, DateTimeKind.Utc).AddTicks(315),
                             Description = "Ladepark an der Berliner Niederlassung",
                             IsActive = true,
                             Latitude = 52.5200m,
@@ -364,6 +273,15 @@ namespace ChargingControlSystem.Data.Migrations
                     b.Property<Guid>("ChargingStationId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("ConnectorFormat")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("ConnectorType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -384,7 +302,13 @@ namespace ChargingControlSystem.Data.Migrations
                     b.Property<DateTime?>("LastStatusChange")
                         .HasColumnType("datetime2");
 
+                    b.Property<int>("MaxCurrent")
+                        .HasColumnType("int");
+
                     b.Property<int>("MaxPower")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MaxVoltage")
                         .HasColumnType("int");
 
                     b.Property<string>("Name")
@@ -395,6 +319,14 @@ namespace ChargingControlSystem.Data.Migrations
                     b.Property<string>("Notes")
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("PhysicalReference")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("PowerType")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
 
                     b.Property<string>("PublicKey")
                         .HasMaxLength(4000)
@@ -427,11 +359,16 @@ namespace ChargingControlSystem.Data.Migrations
                         {
                             Id = new Guid("88888888-8888-8888-8888-888888888888"),
                             ChargingStationId = new Guid("44444444-4444-4444-4444-444444444444"),
-                            CreatedAt = new DateTime(2025, 10, 18, 12, 24, 19, 817, DateTimeKind.Utc).AddTicks(9283),
+                            ConnectorFormat = "SOCKET",
+                            ConnectorType = "CCS",
+                            CreatedAt = new DateTime(2025, 11, 3, 8, 52, 28, 192, DateTimeKind.Utc).AddTicks(386),
                             EvseId = 1,
                             IsActive = true,
+                            MaxCurrent = 200,
                             MaxPower = 150,
+                            MaxVoltage = 800,
                             Name = "Ladepunkt 1",
+                            PowerType = "DC",
                             Status = 0,
                             SupportsRemoteStartStop = true,
                             SupportsReservation = false,
@@ -441,11 +378,16 @@ namespace ChargingControlSystem.Data.Migrations
                         {
                             Id = new Guid("99999999-9999-9999-9999-999999999999"),
                             ChargingStationId = new Guid("44444444-4444-4444-4444-444444444444"),
-                            CreatedAt = new DateTime(2025, 10, 18, 12, 24, 19, 817, DateTimeKind.Utc).AddTicks(9284),
+                            ConnectorFormat = "SOCKET",
+                            ConnectorType = "CCS",
+                            CreatedAt = new DateTime(2025, 11, 3, 8, 52, 28, 192, DateTimeKind.Utc).AddTicks(389),
                             EvseId = 2,
                             IsActive = true,
+                            MaxCurrent = 200,
                             MaxPower = 150,
+                            MaxVoltage = 800,
                             Name = "Ladepunkt 2",
+                            PowerType = "DC",
                             Status = 0,
                             SupportsRemoteStartStop = true,
                             SupportsReservation = false,
@@ -465,7 +407,7 @@ namespace ChargingControlSystem.Data.Migrations
                     b.Property<DateTime?>("ChargingCompletedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<Guid>("ChargingConnectorId")
+                    b.Property<Guid>("ChargingPointId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<decimal>("Cost")
@@ -513,7 +455,7 @@ namespace ChargingControlSystem.Data.Migrations
 
                     b.HasIndex("AuthorizationMethodId");
 
-                    b.HasIndex("ChargingConnectorId");
+                    b.HasIndex("ChargingPointId");
 
                     b.HasIndex("QrCodeId");
 
@@ -618,9 +560,9 @@ namespace ChargingControlSystem.Data.Migrations
                         {
                             Id = new Guid("44444444-4444-4444-4444-444444444444"),
                             ChargingParkId = new Guid("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
-                            CreatedAt = new DateTime(2025, 10, 18, 12, 24, 19, 817, DateTimeKind.Utc).AddTicks(9244),
+                            CreatedAt = new DateTime(2025, 11, 3, 8, 52, 28, 192, DateTimeKind.Utc).AddTicks(346),
                             IsActive = true,
-                            LastHeartbeat = new DateTime(2025, 11, 7, 12, 19, 19, 817, DateTimeKind.Utc).AddTicks(9245),
+                            LastHeartbeat = new DateTime(2025, 11, 23, 8, 47, 28, 192, DateTimeKind.Utc).AddTicks(347),
                             Latitude = 48.1351m,
                             Longitude = 11.5820m,
                             MaxPower = 150,
@@ -636,9 +578,9 @@ namespace ChargingControlSystem.Data.Migrations
                         {
                             Id = new Guid("55555555-5555-5555-5555-555555555555"),
                             ChargingParkId = new Guid("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
-                            CreatedAt = new DateTime(2025, 10, 20, 12, 24, 19, 817, DateTimeKind.Utc).AddTicks(9249),
+                            CreatedAt = new DateTime(2025, 11, 5, 8, 52, 28, 192, DateTimeKind.Utc).AddTicks(353),
                             IsActive = true,
-                            LastHeartbeat = new DateTime(2025, 11, 7, 12, 21, 19, 817, DateTimeKind.Utc).AddTicks(9250),
+                            LastHeartbeat = new DateTime(2025, 11, 23, 8, 49, 28, 192, DateTimeKind.Utc).AddTicks(353),
                             Latitude = 48.1352m,
                             Longitude = 11.5821m,
                             MaxPower = 22,
@@ -985,10 +927,10 @@ namespace ChargingControlSystem.Data.Migrations
                             Id = new Guid("eeee2222-2222-2222-2222-222222222222"),
                             ChargingParkId = new Guid("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
                             Code = "CC-PARK-001",
-                            CreatedAt = new DateTime(2025, 10, 28, 12, 24, 19, 817, DateTimeKind.Utc).AddTicks(9448),
+                            CreatedAt = new DateTime(2025, 11, 13, 8, 52, 28, 192, DateTimeKind.Utc).AddTicks(513),
                             CurrentUses = 0,
                             Description = "Einladung zum Hauptparkplatz",
-                            ExpiresAt = new DateTime(2026, 11, 7, 12, 24, 19, 817, DateTimeKind.Utc).AddTicks(9446),
+                            ExpiresAt = new DateTime(2026, 11, 23, 8, 52, 28, 192, DateTimeKind.Utc).AddTicks(512),
                             IsActive = true,
                             MaxUses = 100,
                             TenantId = new Guid("11111111-1111-1111-1111-111111111111"),
@@ -1184,7 +1126,7 @@ namespace ChargingControlSystem.Data.Migrations
                             Address = "Musterstraße 123",
                             City = "Berlin",
                             Country = "Deutschland",
-                            CreatedAt = new DateTime(2025, 10, 8, 12, 24, 19, 817, DateTimeKind.Utc).AddTicks(9067),
+                            CreatedAt = new DateTime(2025, 10, 24, 8, 52, 28, 192, DateTimeKind.Utc).AddTicks(119),
                             Description = "Hauptunternehmen für Lade-Management",
                             Email = "info@chargingcontrol.de",
                             IsActive = true,
@@ -1202,7 +1144,7 @@ namespace ChargingControlSystem.Data.Migrations
                             Address = "Acme Straße 456",
                             City = "München",
                             Country = "Deutschland",
-                            CreatedAt = new DateTime(2025, 10, 13, 12, 24, 19, 817, DateTimeKind.Utc).AddTicks(9077),
+                            CreatedAt = new DateTime(2025, 10, 29, 8, 52, 28, 192, DateTimeKind.Utc).AddTicks(153),
                             Description = "Sub-Tenant für Acme Corporation",
                             Email = "info@acme.de",
                             IsActive = true,
@@ -1259,6 +1201,13 @@ namespace ChargingControlSystem.Data.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("nvarchar(20)");
 
+                    b.Property<string>("RefreshToken")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime?>("RefreshTokenExpiresAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<int>("Role")
                         .HasColumnType("int");
 
@@ -1276,12 +1225,12 @@ namespace ChargingControlSystem.Data.Migrations
                         new
                         {
                             Id = new Guid("22222222-2222-2222-2222-222222222222"),
-                            CreatedAt = new DateTime(2025, 10, 8, 12, 24, 19, 817, DateTimeKind.Utc).AddTicks(9134),
+                            CreatedAt = new DateTime(2025, 10, 24, 8, 52, 28, 192, DateTimeKind.Utc).AddTicks(232),
                             Email = "admin@chargingcontrol.com",
                             FirstName = "Admin",
                             IsActive = true,
                             IsEmailConfirmed = true,
-                            LastLoginAt = new DateTime(2025, 11, 6, 12, 24, 19, 817, DateTimeKind.Utc).AddTicks(9134),
+                            LastLoginAt = new DateTime(2025, 11, 22, 8, 52, 28, 192, DateTimeKind.Utc).AddTicks(232),
                             LastName = "User",
                             PasswordHash = "$2a$11$QUxBZq94RgWvH09M.ER7EuF6Ju3mP45b9cEXAS99Iz09cAfKEZUeW",
                             Role = 1,
@@ -1290,12 +1239,12 @@ namespace ChargingControlSystem.Data.Migrations
                         new
                         {
                             Id = new Guid("aaaabbbb-2222-3333-4444-555555555555"),
-                            CreatedAt = new DateTime(2025, 10, 13, 12, 24, 19, 817, DateTimeKind.Utc).AddTicks(9142),
+                            CreatedAt = new DateTime(2025, 10, 29, 8, 52, 28, 192, DateTimeKind.Utc).AddTicks(239),
                             Email = "admin@acme.com",
                             FirstName = "John",
                             IsActive = true,
                             IsEmailConfirmed = true,
-                            LastLoginAt = new DateTime(2025, 11, 5, 12, 24, 19, 817, DateTimeKind.Utc).AddTicks(9142),
+                            LastLoginAt = new DateTime(2025, 11, 21, 8, 52, 28, 192, DateTimeKind.Utc).AddTicks(239),
                             LastName = "Doe",
                             PasswordHash = "$2a$11$QUxBZq94RgWvH09M.ER7EuF6Ju3mP45b9cEXAS99Iz09cAfKEZUeW",
                             Role = 1,
@@ -1349,7 +1298,7 @@ namespace ChargingControlSystem.Data.Migrations
                         new
                         {
                             Id = new Guid("33333333-3333-3333-3333-333333333333"),
-                            CreatedAt = new DateTime(2025, 10, 8, 12, 24, 19, 817, DateTimeKind.Utc).AddTicks(9103),
+                            CreatedAt = new DateTime(2025, 10, 24, 8, 52, 28, 192, DateTimeKind.Utc).AddTicks(188),
                             Description = "Vollständige Administrator-Rechte",
                             IsActive = true,
                             Name = "Administratoren",
@@ -1358,7 +1307,7 @@ namespace ChargingControlSystem.Data.Migrations
                         new
                         {
                             Id = new Guid("aaaabbbb-3333-4444-5555-666666666666"),
-                            CreatedAt = new DateTime(2025, 10, 13, 12, 24, 19, 817, DateTimeKind.Utc).AddTicks(9104),
+                            CreatedAt = new DateTime(2025, 10, 29, 8, 52, 28, 192, DateTimeKind.Utc).AddTicks(191),
                             Description = "Administrator-Rechte für Acme",
                             IsActive = true,
                             Name = "Acme Administratoren",
@@ -1418,14 +1367,14 @@ namespace ChargingControlSystem.Data.Migrations
                         new
                         {
                             Id = new Guid("ccccdddd-1111-2222-3333-444444444444"),
-                            AssignedAt = new DateTime(2025, 10, 8, 12, 24, 19, 817, DateTimeKind.Utc).AddTicks(9167),
+                            AssignedAt = new DateTime(2025, 10, 24, 8, 52, 28, 192, DateTimeKind.Utc).AddTicks(269),
                             UserGroupId = new Guid("33333333-3333-3333-3333-333333333333"),
                             UserId = new Guid("22222222-2222-2222-2222-222222222222")
                         },
                         new
                         {
                             Id = new Guid("ccccdddd-2222-3333-4444-555555555555"),
-                            AssignedAt = new DateTime(2025, 10, 13, 12, 24, 19, 817, DateTimeKind.Utc).AddTicks(9171),
+                            AssignedAt = new DateTime(2025, 10, 29, 8, 52, 28, 192, DateTimeKind.Utc).AddTicks(273),
                             UserGroupId = new Guid("aaaabbbb-3333-4444-5555-666666666666"),
                             UserId = new Guid("aaaabbbb-2222-3333-4444-555555555555")
                         });
@@ -1527,7 +1476,7 @@ namespace ChargingControlSystem.Data.Migrations
                         {
                             Id = new Guid("66666666-6666-6666-6666-666666666666"),
                             Color = "Pearl White",
-                            CreatedAt = new DateTime(2025, 10, 13, 12, 24, 19, 817, DateTimeKind.Utc).AddTicks(9370),
+                            CreatedAt = new DateTime(2025, 10, 29, 8, 52, 28, 192, DateTimeKind.Utc).AddTicks(419),
                             IsActive = true,
                             LicensePlate = "M-CC 1234",
                             Make = "Tesla",
@@ -1541,7 +1490,7 @@ namespace ChargingControlSystem.Data.Migrations
                         {
                             Id = new Guid("77777777-7777-7777-7777-777777777777"),
                             Color = "Mineral White",
-                            CreatedAt = new DateTime(2025, 10, 18, 12, 24, 19, 817, DateTimeKind.Utc).AddTicks(9372),
+                            CreatedAt = new DateTime(2025, 11, 3, 8, 52, 28, 192, DateTimeKind.Utc).AddTicks(423),
                             IsActive = true,
                             LicensePlate = "M-CC 5678",
                             Make = "BMW",
@@ -1590,7 +1539,7 @@ namespace ChargingControlSystem.Data.Migrations
                         new
                         {
                             Id = new Guid("cccc0000-0000-0000-0000-000000000000"),
-                            AssignedAt = new DateTime(2025, 10, 31, 12, 24, 19, 817, DateTimeKind.Utc).AddTicks(9393),
+                            AssignedAt = new DateTime(2025, 11, 16, 8, 52, 28, 192, DateTimeKind.Utc).AddTicks(447),
                             AssignmentType = 1,
                             UserId = new Guid("22222222-2222-2222-2222-222222222222"),
                             VehicleId = new Guid("66666666-6666-6666-6666-666666666666")
@@ -1636,17 +1585,6 @@ namespace ChargingControlSystem.Data.Migrations
                     b.Navigation("ChargingSession");
                 });
 
-            modelBuilder.Entity("ChargingControlSystem.Data.Entities.ChargingConnector", b =>
-                {
-                    b.HasOne("ChargingControlSystem.Data.Entities.ChargingPoint", "ChargingPoint")
-                        .WithMany("Connectors")
-                        .HasForeignKey("ChargingPointId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ChargingPoint");
-                });
-
             modelBuilder.Entity("ChargingControlSystem.Data.Entities.ChargingPark", b =>
                 {
                     b.HasOne("ChargingControlSystem.Data.Entities.Tenant", "Tenant")
@@ -1676,9 +1614,9 @@ namespace ChargingControlSystem.Data.Migrations
                         .HasForeignKey("AuthorizationMethodId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("ChargingControlSystem.Data.Entities.ChargingConnector", "ChargingConnector")
+                    b.HasOne("ChargingControlSystem.Data.Entities.ChargingPoint", "ChargingPoint")
                         .WithMany("ChargingSessions")
-                        .HasForeignKey("ChargingConnectorId")
+                        .HasForeignKey("ChargingPointId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -1705,7 +1643,7 @@ namespace ChargingControlSystem.Data.Migrations
 
                     b.Navigation("AuthorizationMethod");
 
-                    b.Navigation("ChargingConnector");
+                    b.Navigation("ChargingPoint");
 
                     b.Navigation("QrCode");
 
@@ -1960,11 +1898,6 @@ namespace ChargingControlSystem.Data.Migrations
                     b.Navigation("Transactions");
                 });
 
-            modelBuilder.Entity("ChargingControlSystem.Data.Entities.ChargingConnector", b =>
-                {
-                    b.Navigation("ChargingSessions");
-                });
-
             modelBuilder.Entity("ChargingControlSystem.Data.Entities.ChargingPark", b =>
                 {
                     b.Navigation("ChargingStations");
@@ -1974,7 +1907,7 @@ namespace ChargingControlSystem.Data.Migrations
 
             modelBuilder.Entity("ChargingControlSystem.Data.Entities.ChargingPoint", b =>
                 {
-                    b.Navigation("Connectors");
+                    b.Navigation("ChargingSessions");
                 });
 
             modelBuilder.Entity("ChargingControlSystem.Data.Entities.ChargingStation", b =>

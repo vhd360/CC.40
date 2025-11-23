@@ -1,12 +1,126 @@
 const API_BASE_URL = 'http://localhost:5126/api';
 
-// Helper function to get auth headers
-const getAuthHeaders = (): HeadersInit => {
-  const token = localStorage.getItem('token');
-  return {
+// Helper function to refresh token
+let isRefreshing = false;
+let refreshPromise: Promise<string | null> | null = null;
+
+const refreshToken = async (): Promise<string | null> => {
+  if (isRefreshing && refreshPromise) {
+    return refreshPromise;
+  }
+
+  isRefreshing = true;
+  refreshPromise = (async () => {
+    try {
+      const refreshTokenValue = localStorage.getItem('refreshToken');
+      if (!refreshTokenValue) {
+        return null;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(refreshTokenValue)
+      });
+
+      if (!response.ok) {
+        // Refresh token ist ungültig - logout
+        localStorage.removeItem('token');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+        return null;
+      }
+
+      const data = await response.json();
+      if (data.success && data.token) {
+        localStorage.setItem('token', data.token);
+        if (data.refreshToken) {
+          localStorage.setItem('refreshToken', data.refreshToken);
+        }
+        if (data.user) {
+          localStorage.setItem('user', JSON.stringify(data.user));
+        }
+        return data.token;
+      }
+      return null;
+    } catch (error) {
+      console.error('Token refresh failed:', error);
+      localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+      return null;
+    } finally {
+      isRefreshing = false;
+      refreshPromise = null;
+    }
+  })();
+
+  return refreshPromise;
+};
+
+// Helper function to check if token is expired or will expire soon
+const isTokenExpiredOrExpiringSoon = (token: string | null): boolean => {
+  if (!token) return true;
+  
+  try {
+    // Decode JWT token (Base64)
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const expirationTime = payload.exp * 1000; // exp is in seconds, convert to milliseconds
+    const currentTime = Date.now();
+    const timeUntilExpiry = expirationTime - currentTime;
+    
+    // Token is expired or will expire in less than 1 minute
+    return timeUntilExpiry < 60 * 1000;
+  } catch (error) {
+    // If we can't decode the token, assume it's invalid
+    return true;
+  }
+};
+
+// Helper function to make authenticated API calls with automatic token refresh
+const fetchWithAuth = async (url: string, options: RequestInit = {}): Promise<Response> => {
+  // Check if token is expired or expiring soon, and refresh proactively
+  let token = localStorage.getItem('token');
+  if (isTokenExpiredOrExpiringSoon(token)) {
+    console.log('🔄 Token abgelaufen oder läuft bald ab, erneuere proaktiv...');
+    const newToken = await refreshToken();
+    if (newToken) {
+      token = newToken;
+      console.log('✅ Token proaktiv erneuert');
+    } else {
+      console.error('❌ Proaktiver Token-Refresh fehlgeschlagen');
+    }
+  }
+  
+  // Build headers with current token
+  let headers: HeadersInit = {
     'Content-Type': 'application/json',
     ...(token && { 'Authorization': `Bearer ${token}` })
   };
+  
+  // Merge with provided headers (allow override of Content-Type if needed)
+  const customHeaders = options.headers as Record<string, string> || {};
+  headers = { ...headers, ...customHeaders };
+  
+  let response = await fetch(url, { ...options, headers });
+  
+  // If 401, try to refresh token and retry once
+  if (response.status === 401) {
+    console.log('🔄 401 Fehler erhalten, versuche Token-Refresh...');
+    const newToken = await refreshToken();
+    if (newToken) {
+      console.log('✅ Token erneuert, wiederhole Request...');
+      // Retry with new token
+      headers = { ...headers, 'Authorization': `Bearer ${newToken}` };
+      response = await fetch(url, { ...options, headers });
+    } else {
+      console.error('❌ Token-Refresh fehlgeschlagen');
+    }
+  }
+  
+  return response;
 };
 
 // API Response types
@@ -185,7 +299,14 @@ export interface SessionCostBreakdown {
       postalCode?: string;
     };
   };
-  connector: {
+  chargingPoint: {
+    id: string;
+    evseId: number;
+    name: string;
+    type: string;
+  };
+  // Legacy support - wird vom Backend noch gesendet, kann später entfernt werden
+  connector?: {
     id: string;
     connectorId: number;
     type: string;
@@ -301,9 +422,7 @@ export interface UpdateVehicleAssignmentRequest {
 export const api = {
   // Tenants
   async getTenants(): Promise<Tenant[]> {
-    const response = await fetch(`${API_BASE_URL}/tenants`, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/tenants`);
     if (!response.ok) {
       // Fallback to mock data if API is not available
       return getMockTenants();
@@ -312,9 +431,8 @@ export const api = {
   },
 
   async createTenant(tenant: Omit<Tenant, 'id' | 'createdAt' | 'userCount'>): Promise<Tenant> {
-    const response = await fetch(`${API_BASE_URL}/tenants`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/tenants`, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify(tenant),
     });
     if (!response.ok) throw new Error('Failed to create tenant');
@@ -322,9 +440,8 @@ export const api = {
   },
 
   async updateTenant(id: string, tenant: Partial<Tenant>): Promise<Tenant> {
-    const response = await fetch(`${API_BASE_URL}/tenants/${id}`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/tenants/${id}`, {
       method: 'PUT',
-      headers: getAuthHeaders(),
       body: JSON.stringify(tenant),
     });
     if (!response.ok) throw new Error('Failed to update tenant');
@@ -332,17 +449,14 @@ export const api = {
   },
 
   async deleteTenant(id: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/tenants/${id}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
+    const response = await fetchWithAuth(`${API_BASE_URL}/tenants/${id}`, {
+      method: 'DELETE'
     });
     if (!response.ok) throw new Error('Failed to delete tenant');
   },
 
   async getTenantById(id: string): Promise<Tenant> {
-    const response = await fetch(`${API_BASE_URL}/tenants/${id}`, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/tenants/${id}`);
     if (!response.ok) throw new Error('Failed to fetch tenant');
     return response.json();
   },
@@ -350,9 +464,7 @@ export const api = {
   // Users
   async getUsers(tenantId?: string): Promise<any[]> {
     const url = tenantId ? `${API_BASE_URL}/users?tenantId=${tenantId}` : `${API_BASE_URL}/users`;
-    const response = await fetch(url, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(url);
     if (!response.ok) throw new Error('Failed to fetch users');
     return response.json();
   },
@@ -377,9 +489,8 @@ export const api = {
       Role: parseInt(user.role) // Parse role as integer (0=User, 1=TenantAdmin)
     };
 
-    const response = await fetch(`${API_BASE_URL}/users`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/users`, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify(dto),
     });
     if (!response.ok) {
@@ -390,9 +501,8 @@ export const api = {
   },
 
   async updateUser(id: string, user: any): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/users/${id}`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/users/${id}`, {
       method: 'PUT',
-      headers: getAuthHeaders(),
       body: JSON.stringify(user),
     });
     if (!response.ok) throw new Error('Failed to update user');
@@ -400,17 +510,15 @@ export const api = {
   },
 
   async deleteUser(id: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/users/${id}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
+    const response = await fetchWithAuth(`${API_BASE_URL}/users/${id}`, {
+      method: 'DELETE'
     });
     if (!response.ok) throw new Error('Failed to delete user');
   },
 
   async removeGuestUserFromTenant(userId: string): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/users/${userId}/remove-from-tenant`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/users/${userId}/remove-from-tenant`, {
       method: 'DELETE',
-      headers: getAuthHeaders(),
     });
     if (!response.ok) {
       const error = await response.json();
@@ -421,17 +529,14 @@ export const api = {
 
   // Charging Parks
   async getChargingParks(): Promise<any[]> {
-    const response = await fetch(`${API_BASE_URL}/charging-parks`, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/charging-parks`);
     if (!response.ok) throw new Error('Failed to fetch charging parks');
     return response.json();
   },
 
   async createChargingPark(park: any): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/charging-parks`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/charging-parks`, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify(park),
     });
     if (!response.ok) throw new Error('Failed to create charging park');
@@ -439,9 +544,8 @@ export const api = {
   },
 
   async updateChargingPark(id: string, park: any): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/charging-parks/${id}`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/charging-parks/${id}`, {
       method: 'PUT',
-      headers: getAuthHeaders(),
       body: JSON.stringify(park),
     });
     if (!response.ok) throw new Error('Failed to update charging park');
@@ -449,9 +553,8 @@ export const api = {
   },
 
   async deleteChargingPark(id: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/charging-parks/${id}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
+    const response = await fetchWithAuth(`${API_BASE_URL}/charging-parks/${id}`, {
+      method: 'DELETE'
     });
     if (!response.ok) throw new Error('Failed to delete charging park');
   },
@@ -459,15 +562,23 @@ export const api = {
   // Charging Stations
   async getChargingStations(): Promise<ChargingStation[]> {
     try {
-      const response = await fetch(`${API_BASE_URL}/charging-stations`, {
-        headers: getAuthHeaders()
-      });
+      const response = await fetchWithAuth(`${API_BASE_URL}/charging-stations`);
       if (!response.ok) {
         return getMockChargingStations();
       }
       return response.json();
     } catch {
       return getMockChargingStations();
+    }
+  },
+
+  async deleteChargingStation(id: string): Promise<void> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/charging-stations/${id}`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(errorText || 'Failed to delete charging station');
     }
   },
 
@@ -506,9 +617,8 @@ export const api = {
       OcppEndpoint: station.ocppEndpoint || null
     };
 
-    const response = await fetch(`${API_BASE_URL}/charging-stations`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/charging-stations`, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify(dto)
     });
     if (!response.ok) {
@@ -521,9 +631,7 @@ export const api = {
   // Vehicles
   async getVehicles(): Promise<Vehicle[]> {
     try {
-      const response = await fetch(`${API_BASE_URL}/vehicles`, {
-        headers: getAuthHeaders()
-      });
+      const response = await fetchWithAuth(`${API_BASE_URL}/vehicles`);
       if (!response.ok) {
         return getMockVehicles();
       }
@@ -534,9 +642,8 @@ export const api = {
   },
 
   async createVehicle(vehicle: Omit<Vehicle, 'id' | 'createdAt' | 'isActive'>): Promise<Vehicle> {
-    const response = await fetch(`${API_BASE_URL}/vehicles`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/vehicles`, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify(vehicle),
     });
     if (!response.ok) throw new Error('Failed to create vehicle');
@@ -544,9 +651,8 @@ export const api = {
   },
 
   async updateVehicle(id: string, vehicle: Partial<Vehicle>): Promise<Vehicle> {
-    const response = await fetch(`${API_BASE_URL}/vehicles/${id}`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/vehicles/${id}`, {
       method: 'PUT',
-      headers: getAuthHeaders(),
       body: JSON.stringify(vehicle),
     });
     if (!response.ok) throw new Error('Failed to update vehicle');
@@ -554,9 +660,8 @@ export const api = {
   },
 
   async deleteVehicle(id: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/vehicles/${id}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
+    const response = await fetchWithAuth(`${API_BASE_URL}/vehicles/${id}`, {
+      method: 'DELETE'
     });
     if (!response.ok) throw new Error('Failed to delete vehicle');
   },
@@ -564,9 +669,7 @@ export const api = {
   // Charging Sessions
   async getChargingSessions(): Promise<ChargingSession[]> {
     try {
-      const response = await fetch(`${API_BASE_URL}/charging/sessions`, {
-        headers: getAuthHeaders()
-      });
+      const response = await fetchWithAuth(`${API_BASE_URL}/charging/sessions`);
       if (!response.ok) {
         return getMockChargingSessions();
       }
@@ -579,9 +682,7 @@ export const api = {
   // Billing
   async getBillingTransactions(): Promise<BillingTransaction[]> {
     try {
-      const response = await fetch(`${API_BASE_URL}/billing/transactions`, {
-        headers: getAuthHeaders()
-      });
+      const response = await fetchWithAuth(`${API_BASE_URL}/billing/transactions`);
       if (!response.ok) {
         return getMockBillingTransactions();
       }
@@ -594,9 +695,7 @@ export const api = {
   // Dashboard Stats
   async getDashboardStats(): Promise<DashboardStats> {
     try {
-      const response = await fetch(`${API_BASE_URL}/dashboard/stats`, {
-        headers: getAuthHeaders()
-      });
+      const response = await fetchWithAuth(`${API_BASE_URL}/dashboard/stats`);
       if (!response.ok) {
         return getMockDashboardStats();
       }
@@ -608,17 +707,14 @@ export const api = {
 
   // User Groups
   async getUserGroups(): Promise<any[]> {
-    const response = await fetch(`${API_BASE_URL}/user-groups`, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/user-groups`);
     if (!response.ok) throw new Error('Failed to fetch user groups');
     return response.json();
   },
 
   async createUserGroup(group: { name: string; description?: string }): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/user-groups`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/user-groups`, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify(group),
     });
     if (!response.ok) throw new Error('Failed to create user group');
@@ -626,9 +722,8 @@ export const api = {
   },
 
   async updateUserGroup(id: string, group: any): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/user-groups/${id}`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/user-groups/${id}`, {
       method: 'PUT',
-      headers: getAuthHeaders(),
       body: JSON.stringify(group),
     });
     if (!response.ok) throw new Error('Failed to update user group');
@@ -636,41 +731,35 @@ export const api = {
   },
 
   async deleteUserGroup(id: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/user-groups/${id}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
+    const response = await fetchWithAuth(`${API_BASE_URL}/user-groups/${id}`, {
+      method: 'DELETE'
     });
     if (!response.ok) throw new Error('Failed to delete user group');
   },
 
   async getUserGroupDetails(id: string): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/user-groups/${id}`, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/user-groups/${id}`);
     if (!response.ok) throw new Error('Failed to fetch user group details');
     return response.json();
   },
 
   async addUserToGroup(groupId: string, userId: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/user-groups/${groupId}/users/${userId}`, {
-      method: 'POST',
-      headers: getAuthHeaders()
+    const response = await fetchWithAuth(`${API_BASE_URL}/user-groups/${groupId}/users/${userId}`, {
+      method: 'POST'
     });
     if (!response.ok) throw new Error('Failed to add user to group');
   },
 
   async removeUserFromGroup(groupId: string, userId: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/user-groups/${groupId}/users/${userId}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
+    const response = await fetchWithAuth(`${API_BASE_URL}/user-groups/${groupId}/users/${userId}`, {
+      method: 'DELETE'
     });
     if (!response.ok) throw new Error('Failed to remove user from group');
   },
 
   async generateGroupInvite(groupId: string, expiryDays: number = 7): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/user-groups/${groupId}/generate-invite`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/user-groups/${groupId}/generate-invite`, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify({ expiryDays })
     });
     if (!response.ok) throw new Error('Failed to generate invite');
@@ -678,9 +767,8 @@ export const api = {
   },
 
   async joinGroupWithToken(token: string): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/user-groups/join`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/user-groups/join`, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify({ token })
     });
     if (!response.ok) {
@@ -691,50 +779,42 @@ export const api = {
   },
 
   async revokeGroupInvite(groupId: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/user-groups/${groupId}/revoke-invite`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
+    const response = await fetchWithAuth(`${API_BASE_URL}/user-groups/${groupId}/revoke-invite`, {
+      method: 'DELETE'
     });
     if (!response.ok) throw new Error('Failed to revoke invite');
   },
 
   // Permissions
   async getAllPermissions(): Promise<Permission[]> {
-    const response = await fetch(`${API_BASE_URL}/permissions`, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/permissions`);
     if (!response.ok) throw new Error('Failed to fetch permissions');
     return response.json();
   },
 
   async getUserGroupPermissions(groupId: string): Promise<GroupPermission[]> {
-    const response = await fetch(`${API_BASE_URL}/permissions/user-group/${groupId}`, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/permissions/user-group/${groupId}`);
     if (!response.ok) throw new Error('Failed to fetch group permissions');
     return response.json();
   },
 
   async addPermissionToGroup(groupId: string, permissionId: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/permissions/user-group/${groupId}/permissions/${permissionId}`, {
-      method: 'POST',
-      headers: getAuthHeaders()
+    const response = await fetchWithAuth(`${API_BASE_URL}/permissions/user-group/${groupId}/permissions/${permissionId}`, {
+      method: 'POST'
     });
     if (!response.ok) throw new Error('Failed to add permission to group');
   },
 
   async removePermissionFromGroup(groupId: string, permissionId: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/permissions/user-group/${groupId}/permissions/${permissionId}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
+    const response = await fetchWithAuth(`${API_BASE_URL}/permissions/user-group/${groupId}/permissions/${permissionId}`, {
+      method: 'DELETE'
     });
     if (!response.ok) throw new Error('Failed to remove permission from group');
   },
 
   async setGroupPermissions(groupId: string, permissionIds: string[]): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/permissions/user-group/${groupId}/permissions`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/permissions/user-group/${groupId}/permissions`, {
       method: 'PUT',
-      headers: getAuthHeaders(),
       body: JSON.stringify({ permissionIds })
     });
     if (!response.ok) throw new Error('Failed to set group permissions');
@@ -742,17 +822,14 @@ export const api = {
 
   // Charging Station Groups
   async getChargingStationGroups(): Promise<any[]> {
-    const response = await fetch(`${API_BASE_URL}/charging-station-groups`, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/charging-station-groups`);
     if (!response.ok) throw new Error('Failed to fetch charging station groups');
     return response.json();
   },
 
   async createChargingStationGroup(group: { name: string; description?: string }): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/charging-station-groups`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/charging-station-groups`, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify(group),
     });
     if (!response.ok) throw new Error('Failed to create charging station group');
@@ -760,9 +837,8 @@ export const api = {
   },
 
   async updateChargingStationGroup(id: string, group: any): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/charging-station-groups/${id}`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/charging-station-groups/${id}`, {
       method: 'PUT',
-      headers: getAuthHeaders(),
       body: JSON.stringify(group),
     });
     if (!response.ok) throw new Error('Failed to update charging station group');
@@ -770,58 +846,48 @@ export const api = {
   },
 
   async deleteChargingStationGroup(id: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/charging-station-groups/${id}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
+    const response = await fetchWithAuth(`${API_BASE_URL}/charging-station-groups/${id}`, {
+      method: 'DELETE'
     });
     if (!response.ok) throw new Error('Failed to delete charging station group');
   },
 
   async addStationToGroup(groupId: string, stationId: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/charging-station-groups/${groupId}/stations/${stationId}`, {
-      method: 'POST',
-      headers: getAuthHeaders()
+    const response = await fetchWithAuth(`${API_BASE_URL}/charging-station-groups/${groupId}/stations/${stationId}`, {
+      method: 'POST'
     });
     if (!response.ok) throw new Error('Failed to add station to group');
   },
 
   async removeStationFromGroup(groupId: string, stationId: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/charging-station-groups/${groupId}/stations/${stationId}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
+    const response = await fetchWithAuth(`${API_BASE_URL}/charging-station-groups/${groupId}/stations/${stationId}`, {
+      method: 'DELETE'
     });
     if (!response.ok) throw new Error('Failed to remove station from group');
   },
 
   async getChargingStationGroupDetails(id: string): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/charging-station-groups/${id}`, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/charging-station-groups/${id}`);
     if (!response.ok) throw new Error('Failed to fetch charging station group details');
     return response.json();
   },
 
   // Authorization Methods
   async getAuthorizationMethods(): Promise<any[]> {
-    const response = await fetch(`${API_BASE_URL}/authorization-methods`, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/authorization-methods`);
     if (!response.ok) throw new Error('Failed to fetch authorization methods');
     return response.json();
   },
 
   async getAuthorizationMethodsByUser(userId: string): Promise<any[]> {
-    const response = await fetch(`${API_BASE_URL}/authorization-methods/user/${userId}`, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/authorization-methods/user/${userId}`);
     if (!response.ok) throw new Error('Failed to fetch user authorization methods');
     return response.json();
   },
 
   async createAuthorizationMethod(method: any): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/authorization-methods`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/authorization-methods`, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify(method),
     });
     if (!response.ok) throw new Error('Failed to create authorization method');
@@ -829,9 +895,8 @@ export const api = {
   },
 
   async updateAuthorizationMethod(id: string, method: any): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/authorization-methods/${id}`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/authorization-methods/${id}`, {
       method: 'PUT',
-      headers: getAuthHeaders(),
       body: JSON.stringify(method),
     });
     if (!response.ok) throw new Error('Failed to update authorization method');
@@ -839,17 +904,15 @@ export const api = {
   },
 
   async deleteAuthorizationMethod(id: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/authorization-methods/${id}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
+    const response = await fetchWithAuth(`${API_BASE_URL}/authorization-methods/${id}`, {
+      method: 'DELETE'
     });
     if (!response.ok) throw new Error('Failed to delete authorization method');
   },
 
   async verifyAuthorization(type: number, identifier: string): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/authorization-methods/verify`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/authorization-methods/verify`, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify({ type, identifier }),
     });
     if (!response.ok) throw new Error('Authorization failed');
@@ -858,17 +921,13 @@ export const api = {
 
   // User Portal APIs
   async getUserDashboard(): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/user-portal/dashboard`, {
-      headers: getAuthHeaders(),
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/user-portal/dashboard`);
     if (!response.ok) throw new Error('Failed to fetch user dashboard');
     return response.json();
   },
 
   async getUserAvailableStations(): Promise<any[]> {
-    const response = await fetch(`${API_BASE_URL}/user-portal/available-stations`, {
-      headers: getAuthHeaders(),
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/user-portal/available-stations`);
     if (!response.ok) throw new Error('Failed to fetch available stations');
     return response.json();
   },
@@ -877,9 +936,7 @@ export const api = {
     const url = limit 
       ? `${API_BASE_URL}/user-portal/charging-sessions?limit=${limit}`
       : `${API_BASE_URL}/user-portal/charging-sessions`;
-    const response = await fetch(url, {
-      headers: getAuthHeaders(),
-    });
+    const response = await fetchWithAuth(url);
     if (!response.ok) throw new Error('Failed to fetch charging sessions');
     return response.json();
   },
@@ -891,26 +948,21 @@ export const api = {
     if (month) params.append('month', month.toString());
     if (params.toString()) url += `?${params.toString()}`;
     
-    const response = await fetch(url, {
-      headers: getAuthHeaders(),
-    });
+    const response = await fetchWithAuth(url, {});
     if (!response.ok) throw new Error('Failed to fetch costs');
     return response.json();
   },
 
   // User Group Charging Station Group Permissions
   async getUserGroupStationPermissions(userGroupId: string): Promise<any[]> {
-    const response = await fetch(`${API_BASE_URL}/user-groups/${userGroupId}/station-permissions`, {
-      headers: getAuthHeaders(),
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/user-groups/${userGroupId}/station-permissions`);
     if (!response.ok) throw new Error('Failed to fetch station permissions');
     return response.json();
   },
 
   async addStationPermissionToUserGroup(userGroupId: string, chargingStationGroupId: string): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/user-groups/${userGroupId}/station-permissions`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/user-groups/${userGroupId}/station-permissions`, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify({ chargingStationGroupId })
     });
     if (!response.ok) throw new Error('Failed to add station permission');
@@ -918,34 +970,28 @@ export const api = {
   },
 
   async removeStationPermissionFromUserGroup(userGroupId: string, chargingStationGroupId: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/user-groups/${userGroupId}/station-permissions/${chargingStationGroupId}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
+    const response = await fetchWithAuth(`${API_BASE_URL}/user-groups/${userGroupId}/station-permissions/${chargingStationGroupId}`, {
+      method: 'DELETE'
     });
     if (!response.ok) throw new Error('Failed to remove station permission');
   },
 
   // Tariffs
   async getTariffs(): Promise<Tariff[]> {
-    const response = await fetch(`${API_BASE_URL}/tariffs`, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/tariffs`);
     if (!response.ok) throw new Error('Failed to fetch tariffs');
     return response.json();
   },
 
   async getTariff(id: string): Promise<Tariff> {
-    const response = await fetch(`${API_BASE_URL}/tariffs/${id}`, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/tariffs/${id}`);
     if (!response.ok) throw new Error('Failed to fetch tariff');
     return response.json();
   },
 
   async createTariff(data: CreateTariffRequest): Promise<Tariff> {
-    const response = await fetch(`${API_BASE_URL}/tariffs`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/tariffs`, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify(data)
     });
     if (!response.ok) throw new Error('Failed to create tariff');
@@ -953,9 +999,8 @@ export const api = {
   },
 
   async updateTariff(id: string, data: CreateTariffRequest): Promise<Tariff> {
-    const response = await fetch(`${API_BASE_URL}/tariffs/${id}`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/tariffs/${id}`, {
       method: 'PUT',
-      headers: getAuthHeaders(),
       body: JSON.stringify(data)
     });
     if (!response.ok) throw new Error('Failed to update tariff');
@@ -963,67 +1008,56 @@ export const api = {
   },
 
   async deleteTariff(id: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/tariffs/${id}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
+    const response = await fetchWithAuth(`${API_BASE_URL}/tariffs/${id}`, {
+      method: 'DELETE'
     });
     if (!response.ok) throw new Error('Failed to delete tariff');
   },
 
   async assignTariffToUserGroup(tariffId: string, userGroupId: string, priority: number): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/tariffs/${tariffId}/usergroups/${userGroupId}`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/tariffs/${tariffId}/usergroups/${userGroupId}`, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify(priority)
     });
     if (!response.ok) throw new Error('Failed to assign tariff to user group');
   },
 
   async removeTariffFromUserGroup(tariffId: string, userGroupId: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/tariffs/${tariffId}/usergroups/${userGroupId}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
+    const response = await fetchWithAuth(`${API_BASE_URL}/tariffs/${tariffId}/usergroups/${userGroupId}`, {
+      method: 'DELETE'
     });
     if (!response.ok) throw new Error('Failed to remove tariff from user group');
   },
 
   // Session Cost Breakdown
   async getSessionCostBreakdown(sessionId: string): Promise<SessionCostBreakdown> {
-    const response = await fetch(`${API_BASE_URL}/user-portal/charging-sessions/${sessionId}/cost-breakdown`, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/user-portal/charging-sessions/${sessionId}/cost-breakdown`);
     if (!response.ok) throw new Error('Failed to fetch session cost breakdown');
     return response.json();
   },
 
   async getBillingSummary(): Promise<BillingSummary> {
-    const response = await fetch(`${API_BASE_URL}/billing/summary`, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/billing/summary`);
     if (!response.ok) throw new Error('Failed to fetch billing summary');
     return response.json();
   },
 
   async getBillingAccounts(): Promise<BillingAccount[]> {
-    const response = await fetch(`${API_BASE_URL}/billing/accounts`, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/billing/accounts`);
     if (!response.ok) throw new Error('Failed to fetch billing accounts');
     return response.json();
   },
 
   async markTransactionAsPaid(transactionId: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/billing/transactions/${transactionId}/mark-paid`, {
-      method: 'POST',
-      headers: getAuthHeaders()
+    const response = await fetchWithAuth(`${API_BASE_URL}/billing/transactions/${transactionId}/mark-paid`, {
+      method: 'POST'
     });
     if (!response.ok) throw new Error('Failed to mark transaction as paid');
   },
 
   async refundTransaction(transactionId: string, reason: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/billing/transactions/${transactionId}/refund`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/billing/transactions/${transactionId}/refund`, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify({ reason })
     });
     if (!response.ok) throw new Error('Failed to refund transaction');
@@ -1031,9 +1065,7 @@ export const api = {
 
   // PDF Export
   async downloadInvoicePdf(transactionId: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/billing/transactions/${transactionId}/pdf`, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/billing/transactions/${transactionId}/pdf`);
     if (!response.ok) throw new Error('Failed to download PDF');
     
     const blob = await response.blob();
@@ -1048,9 +1080,7 @@ export const api = {
   },
 
   async downloadMonthlySummaryPdf(year: number, month: number): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/billing/monthly-summary/pdf?year=${year}&month=${month}`, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/billing/monthly-summary/pdf?year=${year}&month=${month}`);
     if (!response.ok) throw new Error('Failed to download PDF');
     
     const blob = await response.blob();
@@ -1066,50 +1096,39 @@ export const api = {
 
   // User Billing
   async getUserBillingTransactions(): Promise<BillingTransaction[]> {
-    const response = await fetch(`${API_BASE_URL}/user-portal/billing-transactions`, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/user-portal/billing-transactions`);
     if (!response.ok) throw new Error('Failed to fetch user billing transactions');
     return response.json();
   },
 
   // Vehicle Assignments
   async getVehicleAssignments(includeReturned: boolean = false): Promise<VehicleAssignment[]> {
-    const response = await fetch(`${API_BASE_URL}/vehicle-assignments?includeReturned=${includeReturned}`, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/vehicle-assignments?includeReturned=${includeReturned}`);
     if (!response.ok) throw new Error('Failed to fetch vehicle assignments');
     return response.json();
   },
 
   async getVehicleAssignment(id: string): Promise<VehicleAssignment> {
-    const response = await fetch(`${API_BASE_URL}/vehicle-assignments/${id}`, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/vehicle-assignments/${id}`);
     if (!response.ok) throw new Error('Failed to fetch vehicle assignment');
     return response.json();
   },
 
   async getVehicleAssignmentsByVehicle(vehicleId: string, includeReturned: boolean = false): Promise<VehicleAssignment[]> {
-    const response = await fetch(`${API_BASE_URL}/vehicle-assignments/vehicle/${vehicleId}?includeReturned=${includeReturned}`, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/vehicle-assignments/vehicle/${vehicleId}?includeReturned=${includeReturned}`);
     if (!response.ok) throw new Error('Failed to fetch vehicle assignments');
     return response.json();
   },
 
   async getVehicleAssignmentsByUser(userId: string, includeReturned: boolean = false): Promise<VehicleAssignment[]> {
-    const response = await fetch(`${API_BASE_URL}/vehicle-assignments/user/${userId}?includeReturned=${includeReturned}`, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/vehicle-assignments/user/${userId}?includeReturned=${includeReturned}`);
     if (!response.ok) throw new Error('Failed to fetch vehicle assignments');
     return response.json();
   },
 
   async createVehicleAssignment(data: CreateVehicleAssignmentRequest): Promise<VehicleAssignment> {
-    const response = await fetch(`${API_BASE_URL}/vehicle-assignments`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/vehicle-assignments`, {
       method: 'POST',
-      headers: getAuthHeaders(),
       body: JSON.stringify(data)
     });
     if (!response.ok) {
@@ -1120,9 +1139,8 @@ export const api = {
   },
 
   async updateVehicleAssignment(id: string, data: UpdateVehicleAssignmentRequest): Promise<VehicleAssignment> {
-    const response = await fetch(`${API_BASE_URL}/vehicle-assignments/${id}`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/vehicle-assignments/${id}`, {
       method: 'PUT',
-      headers: getAuthHeaders(),
       body: JSON.stringify(data)
     });
     if (!response.ok) throw new Error('Failed to update vehicle assignment');
@@ -1130,17 +1148,15 @@ export const api = {
   },
 
   async returnVehicle(assignmentId: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/vehicle-assignments/${assignmentId}/return`, {
-      method: 'POST',
-      headers: getAuthHeaders()
+    const response = await fetchWithAuth(`${API_BASE_URL}/vehicle-assignments/${assignmentId}/return`, {
+      method: 'POST'
     });
     if (!response.ok) throw new Error('Failed to return vehicle');
   },
 
   async deleteVehicleAssignment(id: string): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/vehicle-assignments/${id}`, {
-      method: 'DELETE',
-      headers: getAuthHeaders()
+    const response = await fetchWithAuth(`${API_BASE_URL}/vehicle-assignments/${id}`, {
+      method: 'DELETE'
     });
     if (!response.ok) {
       const error = await response.json();
@@ -1158,40 +1174,34 @@ export const api = {
   },
 
   // Charging Sessions - Start/Stop
-  async startChargingSession(connectorId: string, vehicleId?: string): Promise<any> {
+  async startChargingSession(chargingPointId: string, vehicleId?: string): Promise<any> {
     const url = vehicleId 
-      ? `${API_BASE_URL}/charging/start/${connectorId}?vehicleId=${vehicleId}`
-      : `${API_BASE_URL}/charging/start/${connectorId}`;
+      ? `${API_BASE_URL}/charging/start/${chargingPointId}?vehicleId=${vehicleId}`
+      : `${API_BASE_URL}/charging/start/${chargingPointId}`;
     
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: getAuthHeaders()
+    const response = await fetchWithAuth(url, {
+      method: 'POST'
     });
     if (!response.ok) throw new Error('Failed to start charging session');
     return response.json();
   },
 
   async stopChargingSession(sessionId: string): Promise<any> {
-    const response = await fetch(`${API_BASE_URL}/charging/stop/${sessionId}`, {
-      method: 'POST',
-      headers: getAuthHeaders()
+    const response = await fetchWithAuth(`${API_BASE_URL}/charging/stop/${sessionId}`, {
+      method: 'POST'
     });
     if (!response.ok) throw new Error('Failed to stop charging session');
     return response.json();
   },
 
   async getActiveSessions(): Promise<any[]> {
-    const response = await fetch(`${API_BASE_URL}/charging/sessions/active`, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/charging/sessions/active`);
     if (!response.ok) throw new Error('Failed to fetch active sessions');
     return response.json();
   },
 
   async getStationConnectors(stationId: string): Promise<any[]> {
-    const response = await fetch(`${API_BASE_URL}/charging/stations/${stationId}/connectors`, {
-      headers: getAuthHeaders()
-    });
+    const response = await fetchWithAuth(`${API_BASE_URL}/charging/stations/${stationId}/connectors`);
     if (!response.ok) throw new Error('Failed to fetch station connectors');
     return response.json();
   }
@@ -1433,5 +1443,6 @@ function getMockDashboardStats(): DashboardStats {
     activeVehicles: 2
   };
 }
+
 
 

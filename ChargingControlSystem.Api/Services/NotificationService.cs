@@ -23,7 +23,7 @@ public class NotificationService : INotificationService
             var notification = new
             {
                 Type = "station_status_changed",
-                StationId = stationId,
+                StationId = stationId.ToString(), // Als String senden für konsistente Vergleichbarkeit
                 Status = status,
                 Message = message,
                 Timestamp = DateTime.UtcNow
@@ -33,11 +33,13 @@ public class NotificationService : INotificationService
                 .Group($"tenant_{tenantId}")
                 .SendAsync("StationStatusChanged", notification);
 
-            _logger.LogDebug("Sent station status notification: Station {StationId}, Status {Status}", stationId, status);
+            _logger.LogInformation("Sent station status notification: TenantId={TenantId}, StationId={StationId}, Status={Status}", 
+                tenantId, stationId, status);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to send station status notification");
+            _logger.LogError(ex, "Failed to send station status notification: TenantId={TenantId}, StationId={StationId}", 
+                tenantId, stationId);
         }
     }
 
@@ -114,4 +116,6 @@ public class NotificationService : INotificationService
         }
     }
 }
+
+
 

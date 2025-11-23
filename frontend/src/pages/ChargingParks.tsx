@@ -4,6 +4,8 @@ import { Button } from '../components/ui/button';
 import { MapPin, Plus, Loader2, Edit, Trash2, Building2 } from 'lucide-react';
 import { api } from '../services/api';
 import { ChargingParkForm, ChargingParkFormData } from '../components/ChargingParkForm';
+import { useToast } from '../components/ui/toast';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
 interface ChargingPark {
   id: string;
@@ -25,6 +27,11 @@ export const ChargingParks: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingPark, setEditingPark] = useState<ChargingPark | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; parkId: string | null; parkName?: string }>({
+    open: false,
+    parkId: null
+  });
+  const { showToast } = useToast();
 
   const loadParks = async () => {
     try {
@@ -47,9 +54,10 @@ export const ChargingParks: React.FC = () => {
       await api.createChargingPark(data);
       setShowForm(false);
       loadParks();
+      showToast('Ladepark erfolgreich erstellt', 'success');
     } catch (error) {
       console.error('Failed to create charging park:', error);
-      alert('Fehler beim Anlegen des Ladeparks');
+      showToast('Fehler beim Anlegen des Ladeparks', 'error');
     }
   };
 
@@ -61,21 +69,34 @@ export const ChargingParks: React.FC = () => {
       setEditingPark(null);
       setShowForm(false);
       loadParks();
+      showToast('Ladepark erfolgreich aktualisiert', 'success');
     } catch (error) {
       console.error('Failed to update charging park:', error);
-      alert('Fehler beim Aktualisieren des Ladeparks');
+      showToast('Fehler beim Aktualisieren des Ladeparks', 'error');
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Möchten Sie diesen Ladepark wirklich löschen?')) return;
+  const handleDelete = (id: string) => {
+    const park = parks.find(p => p.id === id);
+    setDeleteConfirm({
+      open: true,
+      parkId: id,
+      parkName: park?.name
+    });
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirm.parkId) return;
     
     try {
-      await api.deleteChargingPark(id);
+      await api.deleteChargingPark(deleteConfirm.parkId);
       loadParks();
+      showToast('Ladepark erfolgreich gelöscht', 'success');
     } catch (error) {
       console.error('Failed to delete charging park:', error);
-      alert('Fehler beim Löschen des Ladeparks');
+      showToast('Fehler beim Löschen des Ladeparks', 'error');
+    } finally {
+      setDeleteConfirm({ open: false, parkId: null });
     }
   };
 
@@ -197,6 +218,51 @@ export const ChargingParks: React.FC = () => {
           </CardContent>
         </Card>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={deleteConfirm.open}
+        onOpenChange={(open) => setDeleteConfirm({ ...deleteConfirm, open })}
+        title="Ladepark löschen"
+        message={`Möchten Sie den Ladepark "${deleteConfirm.parkName}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`}
+        confirmText="Löschen"
+        cancelText="Abbrechen"
+        variant="destructive"
+        onConfirm={handleDeleteConfirm}
+      />
+    </div>
+  );
+};
+
+
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Building2 className="h-16 w-16 text-gray-300 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Keine Ladeparks vorhanden</h3>
+            <p className="text-gray-600 mb-4">Legen Sie Ihren ersten Ladepark an</p>
+            <Button onClick={() => setShowForm(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Ladepark anlegen
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={deleteConfirm.open}
+        onOpenChange={(open) => setDeleteConfirm({ ...deleteConfirm, open })}
+        title="Ladepark löschen"
+        message={`Möchten Sie den Ladepark "${deleteConfirm.parkName}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`}
+        confirmText="Löschen"
+        cancelText="Abbrechen"
+        variant="destructive"
+        onConfirm={handleDeleteConfirm}
+      />
     </div>
   );
 };

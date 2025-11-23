@@ -247,8 +247,10 @@ export const SessionDetail: React.FC = () => {
               </p>
             </div>
             <div>
-              <p className="text-sm text-gray-600">Konnektor</p>
-              <p className="font-medium">#{session.connector.connectorId} - {session.connector.type}</p>
+              <p className="text-sm text-gray-600">Ladepunkt</p>
+              <p className="font-medium">
+                EVSE {session.chargingPoint?.evseId || session.connector?.connectorId} - {session.chargingPoint?.name || session.chargingPoint?.type || session.connector?.type || 'Unbekannt'}
+              </p>
             </div>
           </CardContent>
         </Card>

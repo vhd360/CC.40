@@ -48,33 +48,31 @@ public class ChargingService : IChargingService
         return await _context.ChargingStations
             .Include(cs => cs.ChargingPark)
             .Include(cs => cs.ChargingPoints)
-                .ThenInclude(cp => cp.Connectors)
             .FirstOrDefaultAsync(cs => cs.Id == stationId && cs.IsActive);
     }
 
-    public async Task<ChargingSession> StartChargingSessionAsync(Guid connectorId, Guid? userId, Guid? vehicleId)
+    public async Task<ChargingSession> StartChargingSessionAsync(Guid chargingPointId, Guid? userId, Guid? vehicleId)
     {
-        var connector = await _context.ChargingConnectors
-            .Include(c => c.ChargingPoint)
-                .ThenInclude(cp => cp.ChargingStation)
-                    .ThenInclude(cs => cs.ChargingPark)
-            .FirstOrDefaultAsync(c => c.Id == connectorId);
+        var chargingPoint = await _context.ChargingPoints
+            .Include(cp => cp.ChargingStation)
+                .ThenInclude(cs => cs.ChargingPark)
+            .FirstOrDefaultAsync(cp => cp.Id == chargingPointId);
 
-        if (connector == null || connector.Status != ConnectorStatus.Available)
+        if (chargingPoint == null || chargingPoint.Status != ChargingPointStatus.Available)
         {
-            throw new InvalidOperationException("Connector nicht verfügbar");
+            throw new InvalidOperationException("Ladepunkt nicht verfügbar");
         }
 
-        // Check for existing active session on this connector
+        // Check for existing active session on this charging point
         var existingActiveSession = await _context.ChargingSessions
-            .FirstOrDefaultAsync(s => s.ChargingConnectorId == connectorId && 
+            .FirstOrDefaultAsync(s => s.ChargingPointId == chargingPointId && 
                                      s.Status == ChargingSessionStatus.Charging);
 
         if (existingActiveSession != null)
         {
-            _logger.LogWarning("Connector {ConnectorId} already has an active session {SessionId}", 
-                connectorId, existingActiveSession.Id);
-            throw new InvalidOperationException("An diesem Connector läuft bereits ein Ladevorgang");
+            _logger.LogWarning("ChargingPoint {ChargingPointId} already has an active session {SessionId}", 
+                chargingPointId, existingActiveSession.Id);
+            throw new InvalidOperationException("An diesem Ladepunkt läuft bereits ein Ladevorgang");
         }
 
         var tenant = await _tenantService.GetCurrentTenantAsync();
@@ -134,14 +132,46 @@ public class ChargingService : IChargingService
         // Send OCPP RemoteStartTransaction to charging station
         var remoteStartRequest = new RemoteStartTransactionRequest
         {
-            ConnectorId = connector.ChargingPoint.EvseId,
+            ConnectorId = chargingPoint.EvseId,
             IdTag = idTag
         };
 
-        var chargeBoxId = connector.ChargingPoint.ChargingStation?.ChargeBoxId;
+        var chargeBoxId = chargingPoint.ChargingStation?.ChargeBoxId;
         if (string.IsNullOrEmpty(chargeBoxId))
         {
             throw new InvalidOperationException("Ladestation hat keine ChargeBoxId");
+        }
+
+        // Prüfen, ob Station mit OCPP-Server verbunden ist
+        if (!_ocppServer.IsStationConnected(chargeBoxId))
+        {
+            _logger.LogWarning(
+                "StartChargingSessionAsync: Station {ChargeBoxId} is not connected to OCPP server",
+                chargeBoxId);
+            throw new InvalidOperationException("Ladestation ist nicht mit dem OCPP-Server verbunden");
+        }
+
+        // Zusätzlich prüfen: Wenn kein Heartbeat in den letzten 10 Minuten, als nicht verbunden betrachten
+        if (chargingPoint.ChargingStation?.LastHeartbeat.HasValue == true)
+        {
+            var timeSinceLastHeartbeat = DateTime.UtcNow - chargingPoint.ChargingStation.LastHeartbeat.Value;
+            if (timeSinceLastHeartbeat.TotalMinutes > 10)
+            {
+                _logger.LogWarning(
+                    "StartChargingSessionAsync: Station {ChargeBoxId} last heartbeat was {Minutes} minutes ago",
+                    chargeBoxId, timeSinceLastHeartbeat.TotalMinutes);
+                throw new InvalidOperationException("Ladestation ist nicht mehr mit dem OCPP-Server verbunden (letzter Heartbeat zu lange her)");
+            }
+        }
+
+        // Prüfen, ob Station einen Status hat, der Ladevorgänge erlaubt
+        if (chargingPoint.ChargingStation?.Status == ChargingStationStatus.Unavailable ||
+            chargingPoint.ChargingStation?.Status == ChargingStationStatus.OutOfOrder)
+        {
+            _logger.LogWarning(
+                "StartChargingSessionAsync: Station {ChargeBoxId} has status {Status}, cannot start charging",
+                chargeBoxId, chargingPoint.ChargingStation.Status);
+            throw new InvalidOperationException($"Ladestation ist nicht verfügbar (Status: {chargingPoint.ChargingStation.Status})");
         }
 
         try
@@ -153,7 +183,7 @@ public class ChargingService : IChargingService
 
             _logger.LogInformation("Sent RemoteStartTransaction to {ChargeBoxId}, EVSE {EvseId}, IdTag {IdTag}",
                 chargeBoxId,
-                connector.ChargingPoint.EvseId,
+                chargingPoint.EvseId,
                 idTag);
 
             // Create session in database (will be updated by StartTransaction callback)
@@ -161,7 +191,7 @@ public class ChargingService : IChargingService
             {
                 Id = Guid.NewGuid(),
                 TenantId = tenant.Id,
-                ChargingConnectorId = connectorId,
+                ChargingPointId = chargingPointId,
                 UserId = userId,
                 VehicleId = vehicleId,
                 SessionId = Guid.NewGuid().ToString(),
@@ -171,7 +201,7 @@ public class ChargingService : IChargingService
             };
 
             _context.ChargingSessions.Add(session);
-            connector.Status = ConnectorStatus.Occupied;
+            chargingPoint.Status = ChargingPointStatus.Occupied;
             await _context.SaveChangesAsync();
 
             return session;
@@ -186,9 +216,8 @@ public class ChargingService : IChargingService
     public async Task<ChargingSession> StopChargingSessionAsync(Guid sessionId)
     {
         var session = await _context.ChargingSessions
-            .Include(s => s.ChargingConnector)
-                .ThenInclude(c => c.ChargingPoint)
-                    .ThenInclude(cp => cp.ChargingStation)
+            .Include(s => s.ChargingPoint)
+                .ThenInclude(cp => cp.ChargingStation)
             .FirstOrDefaultAsync(s => s.Id == sessionId);
 
         if (session == null)
@@ -204,7 +233,7 @@ public class ChargingService : IChargingService
         // If session has an OCPP transaction ID, send RemoteStopTransaction
         if (session.OcppTransactionId.HasValue)
         {
-            var chargeBoxId = session.ChargingConnector?.ChargingPoint?.ChargingStation?.ChargeBoxId;
+            var chargeBoxId = session.ChargingPoint?.ChargingStation?.ChargeBoxId;
             
             if (!string.IsNullOrEmpty(chargeBoxId))
             {
@@ -288,9 +317,9 @@ public class ChargingService : IChargingService
         session.EndedAt = DateTime.UtcNow;
         session.Status = ChargingSessionStatus.Completed;
         
-        if (session.ChargingConnector != null)
+        if (session.ChargingPoint != null)
         {
-            session.ChargingConnector.Status = ConnectorStatus.Available;
+            session.ChargingPoint.Status = ChargingPointStatus.Available;
         }
 
         await _context.SaveChangesAsync();
@@ -319,9 +348,8 @@ public class ChargingService : IChargingService
         if (tenant == null) return new List<ChargingSession>();
 
         var query = _context.ChargingSessions
-            .Include(s => s.ChargingConnector)
-                .ThenInclude(c => c.ChargingPoint)
-                    .ThenInclude(cp => cp.ChargingStation)
+            .Include(s => s.ChargingPoint)
+                .ThenInclude(cp => cp.ChargingStation)
             .Where(s => s.TenantId == tenant.Id);
 
         if (userId.HasValue)
@@ -338,10 +366,9 @@ public class ChargingService : IChargingService
         if (tenant == null) return new List<object>();
 
         var activeSessions = await _context.ChargingSessions
-            .Include(s => s.ChargingConnector)
-                .ThenInclude(c => c.ChargingPoint)
-                    .ThenInclude(cp => cp.ChargingStation)
-                        .ThenInclude(cs => cs.ChargingPark)
+            .Include(s => s.ChargingPoint)
+                .ThenInclude(cp => cp.ChargingStation)
+                    .ThenInclude(cs => cs.ChargingPark)
             .Include(s => s.Vehicle)
             .Where(s => s.TenantId == tenant.Id && 
                        s.UserId == userId && 
@@ -354,21 +381,22 @@ public class ChargingService : IChargingService
                 DurationMinutes = (int)(DateTime.UtcNow - s.StartedAt).TotalMinutes,
                 Station = new
                 {
-                    s.ChargingConnector.ChargingPoint.ChargingStation.Id,
-                    s.ChargingConnector.ChargingPoint.ChargingStation.Name,
-                    s.ChargingConnector.ChargingPoint.ChargingStation.StationId,
+                    s.ChargingPoint.ChargingStation.Id,
+                    s.ChargingPoint.ChargingStation.Name,
+                    s.ChargingPoint.ChargingStation.StationId,
                     ChargingPark = new
                     {
-                        s.ChargingConnector.ChargingPoint.ChargingStation.ChargingPark.Name,
-                        s.ChargingConnector.ChargingPoint.ChargingStation.ChargingPark.Address,
-                        s.ChargingConnector.ChargingPoint.ChargingStation.ChargingPark.City
+                        s.ChargingPoint.ChargingStation.ChargingPark.Name,
+                        s.ChargingPoint.ChargingStation.ChargingPark.Address,
+                        s.ChargingPoint.ChargingStation.ChargingPark.City
                     }
                 },
-                Connector = new
+                ChargingPoint = new
                 {
-                    s.ChargingConnector.Id,
-                    s.ChargingConnector.ConnectorId,
-                    Type = s.ChargingConnector.ConnectorType.ToString()
+                    s.ChargingPoint.Id,
+                    s.ChargingPoint.EvseId,
+                    s.ChargingPoint.Name,
+                    Type = s.ChargingPoint.ConnectorType
                 },
                 Vehicle = s.Vehicle != null ? new
                 {
@@ -387,48 +415,141 @@ public class ChargingService : IChargingService
 
     public async Task<IEnumerable<object>> GetStationConnectorsAsync(Guid stationId)
     {
-        var connectors = await _context.ChargingConnectors
-            .Include(c => c.ChargingPoint)
-            .Where(c => c.ChargingPoint.ChargingStationId == stationId)
-            .OrderBy(c => c.ChargingPoint.EvseId)
-            .ThenBy(c => c.ConnectorId)
-            .Select(c => new
+        // Station mit ChargeBoxId laden
+        var station = await _context.ChargingStations
+            .FirstOrDefaultAsync(cs => cs.Id == stationId);
+        
+        if (station == null)
+        {
+            _logger.LogWarning(
+                "GetStationConnectorsAsync: Station {StationId} not found", 
+                stationId);
+            return new List<object>();
+        }
+
+        // Prüfen, ob Station mit OCPP-Server verbunden ist
+        bool isStationConnected = false;
+        if (!string.IsNullOrEmpty(station.ChargeBoxId))
+        {
+            // Prüfe aktive WebSocket-Verbindung
+            isStationConnected = _ocppServer.IsStationConnected(station.ChargeBoxId);
+            
+            // Zusätzlich prüfen: Wenn kein Heartbeat vorhanden oder zu alt, als nicht verbunden betrachten
+            if (isStationConnected)
             {
-                c.Id,
-                c.ConnectorId,
-                EvseId = c.ChargingPoint.EvseId,
-                PointName = c.ChargingPoint.Name,
-                Type = c.ConnectorType.ToString(),
-                Status = c.Status.ToString(),
-                MaxPower = c.ChargingPoint.MaxPower,
-                IsAvailable = c.Status == ConnectorStatus.Available
-            })
+                if (!station.LastHeartbeat.HasValue)
+                {
+                    // Kein Heartbeat = nicht verbunden
+                    _logger.LogWarning(
+                        "GetStationConnectorsAsync: Station {StationId} (ChargeBoxId: {ChargeBoxId}) has no heartbeat, considering disconnected",
+                        stationId, station.ChargeBoxId);
+                    isStationConnected = false;
+                }
+                else
+                {
+                    var timeSinceLastHeartbeat = DateTime.UtcNow - station.LastHeartbeat.Value;
+                    if (timeSinceLastHeartbeat.TotalMinutes > 10)
+                    {
+                        _logger.LogWarning(
+                            "GetStationConnectorsAsync: Station {StationId} (ChargeBoxId: {ChargeBoxId}) last heartbeat was {Minutes} minutes ago, considering disconnected",
+                            stationId, station.ChargeBoxId, timeSinceLastHeartbeat.TotalMinutes);
+                        isStationConnected = false;
+                    }
+                }
+            }
+        }
+        else
+        {
+            // Keine ChargeBoxId = nicht verbunden
+            _logger.LogWarning(
+                "GetStationConnectorsAsync: Station {StationId} has no ChargeBoxId, cannot be connected",
+                stationId);
+        }
+
+        // Alle ChargingPoints für diese Station (auch inaktive für Debugging)
+        var allChargingPoints = await _context.ChargingPoints
+            .Where(cp => cp.ChargingStationId == stationId)
             .ToListAsync();
 
-        return connectors;
+        _logger.LogInformation(
+            "GetStationConnectorsAsync: Station {StationId} (ChargeBoxId: {ChargeBoxId}) has {TotalCount} charging points (active: {ActiveCount}), Connected: {IsConnected}, Status: {Status}, LastHeartbeat: {LastHeartbeat}", 
+            stationId, 
+            station.ChargeBoxId ?? "N/A",
+            allChargingPoints.Count, 
+            allChargingPoints.Count(cp => cp.IsActive),
+            isStationConnected,
+            station.Status,
+            station.LastHeartbeat?.ToString("yyyy-MM-dd HH:mm:ss") ?? "null");
+
+        // Jetzt direkt ChargingPoints verwenden (1:1 Beziehung)
+        // Nur aktive ChargingPoints zurückgeben
+        var chargingPointsList = await _context.ChargingPoints
+            .Where(cp => cp.ChargingStationId == stationId && 
+                        cp.IsActive)
+            .OrderBy(cp => cp.EvseId)
+            .ToListAsync();
+
+        // ChargingPoints mit Verfügbarkeitsprüfung mappen
+        var chargingPoints = chargingPointsList.Select(cp => new
+        {
+            Id = cp.Id.ToString(),
+            ConnectorId = cp.EvseId, // EvseId ist jetzt der ConnectorId
+            EvseId = cp.EvseId,
+            PointName = cp.Name,
+            Type = cp.ConnectorType,
+            Status = cp.Status.ToString(),
+            MaxPower = cp.MaxPower,
+            // Ein Ladepunkt ist verfügbar wenn:
+            // 1. Er aktiv ist
+            // 2. Er einen verfügbaren Status hat
+            // 3. Die Station mit dem OCPP-Server verbunden ist
+            // 4. Die Station selbst nicht Unavailable/OutOfOrder ist
+            // 5. Die Station eine ChargeBoxId hat
+            IsAvailable = cp.IsActive && 
+                         (cp.Status == ChargingPointStatus.Available || 
+                          cp.Status == ChargingPointStatus.Preparing ||
+                          cp.Status == ChargingPointStatus.Finishing) &&
+                         isStationConnected &&
+                         station.Status != ChargingStationStatus.Unavailable &&
+                         station.Status != ChargingStationStatus.OutOfOrder &&
+                         !string.IsNullOrEmpty(station.ChargeBoxId)
+        }).ToList();
+
+        var availableCount = chargingPoints.Count(cp => cp.IsAvailable);
+        _logger.LogInformation(
+            "GetStationConnectorsAsync: Returning {Count} active charging points for station {StationId}, {AvailableCount} available (Station connected: {IsConnected}, Status: {StationStatus}, HasChargeBoxId: {HasChargeBoxId}, LastHeartbeat: {LastHeartbeat})", 
+            chargingPoints.Count, 
+            stationId, 
+            availableCount,
+            isStationConnected,
+            station.Status,
+            !string.IsNullOrEmpty(station.ChargeBoxId),
+            station.LastHeartbeat?.ToString("yyyy-MM-dd HH:mm:ss") ?? "null");
+
+        return chargingPoints;
     }
 
-    public async Task ResetConnectorStatusAsync(Guid connectorId)
+    public async Task ResetConnectorStatusAsync(Guid chargingPointId)
     {
-        var connector = await _context.ChargingConnectors
-            .FirstOrDefaultAsync(c => c.Id == connectorId);
+        var chargingPoint = await _context.ChargingPoints
+            .FirstOrDefaultAsync(cp => cp.Id == chargingPointId);
 
-        if (connector == null)
+        if (chargingPoint == null)
         {
-            throw new InvalidOperationException("Connector not found");
+            throw new InvalidOperationException("Charging point not found");
         }
 
         // Check if there's an active session
         var activeSession = await _context.ChargingSessions
-            .FirstOrDefaultAsync(s => s.ChargingConnectorId == connectorId && 
+            .FirstOrDefaultAsync(s => s.ChargingPointId == chargingPointId && 
                                      s.Status == ChargingSessionStatus.Charging);
 
         if (activeSession != null)
         {
-            throw new InvalidOperationException("Cannot reset connector with active session. Stop the session first.");
+            throw new InvalidOperationException("Cannot reset charging point with active session. Stop the session first.");
         }
 
-        connector.Status = ConnectorStatus.Available;
+        chargingPoint.Status = ChargingPointStatus.Available;
         await _context.SaveChangesAsync();
     }
 
@@ -447,11 +568,11 @@ public class ChargingService : IChargingService
             .ToListAsync();
 
         var duplicatesFound = new List<object>();
-        var duplicatesByConnector = activeSessions
-            .GroupBy(s => s.ChargingConnectorId)
+        var duplicatesByChargingPoint = activeSessions
+            .GroupBy(s => s.ChargingPointId)
             .Where(g => g.Count() > 1);
 
-        foreach (var group in duplicatesByConnector)
+        foreach (var group in duplicatesByChargingPoint)
         {
             var sessions = group.ToList();
             var keepSession = sessions.First(); // Keep the oldest
@@ -465,13 +586,13 @@ public class ChargingService : IChargingService
                 duplicatesFound.Add(new
                 {
                     SessionId = duplicateSession.Id,
-                    ConnectorId = duplicateSession.ChargingConnectorId,
+                    ChargingPointId = duplicateSession.ChargingPointId,
                     StartedAt = duplicateSession.StartedAt,
                     Action = "Stopped (Duplicate)"
                 });
             }
 
-            _logger.LogWarning("Found {Count} duplicate sessions on connector {ConnectorId}. Kept session {KeepId}, cancelled {CancelCount}",
+            _logger.LogWarning("Found {Count} duplicate sessions on charging point {ChargingPointId}. Kept session {KeepId}, cancelled {CancelCount}",
                 sessions.Count, group.Key, keepSession.Id, removeSessions.Count);
         }
 

@@ -10,3 +10,16 @@ C:\Users\gva6397\source\repos\CC.40\ChargingControlSystem.Data\obj\Debug\net8.0\
 C:\Users\gva6397\source\repos\CC.40\ChargingControlSystem.Data\obj\Debug\net8.0\refint\ChargingControlSystem.Data.dll
 C:\Users\gva6397\source\repos\CC.40\ChargingControlSystem.Data\obj\Debug\net8.0\ChargingControlSystem.Data.pdb
 C:\Users\gva6397\source\repos\CC.40\ChargingControlSystem.Data\obj\Debug\net8.0\ref\ChargingControlSystem.Data.dll
+D:\CC.40\ChargingControlSystem.Data\bin\Debug\net8.0\ChargingControlSystem.Data.deps.json
+D:\CC.40\ChargingControlSystem.Data\bin\Debug\net8.0\ChargingControlSystem.Data.dll
+D:\CC.40\ChargingControlSystem.Data\bin\Debug\net8.0\ChargingControlSystem.Data.pdb
+D:\CC.40\ChargingControlSystem.Data\obj\Debug\net8.0\ChargingControlSystem.Data.csproj.AssemblyReference.cache
+D:\CC.40\ChargingControlSystem.Data\obj\Debug\net8.0\ChargingControlSystem.Data.GeneratedMSBuildEditorConfig.editorconfig
+D:\CC.40\ChargingControlSystem.Data\obj\Debug\net8.0\ChargingControlSystem.Data.AssemblyInfoInputs.cache
+D:\CC.40\ChargingControlSystem.Data\obj\Debug\net8.0\ChargingControlSystem.Data.AssemblyInfo.cs
+D:\CC.40\ChargingControlSystem.Data\obj\Debug\net8.0\ChargingControlSystem.Data.csproj.CoreCompileInputs.cache
+D:\CC.40\ChargingControlSystem.Data\obj\Debug\net8.0\ChargingControlSystem.Data.sourcelink.json
+D:\CC.40\ChargingControlSystem.Data\obj\Debug\net8.0\ChargingControlSystem.Data.dll
+D:\CC.40\ChargingControlSystem.Data\obj\Debug\net8.0\refint\ChargingControlSystem.Data.dll
+D:\CC.40\ChargingControlSystem.Data\obj\Debug\net8.0\ChargingControlSystem.Data.pdb
+D:\CC.40\ChargingControlSystem.Data\obj\Debug\net8.0\ref\ChargingControlSystem.Data.dll

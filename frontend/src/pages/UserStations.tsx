@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { Loader2, MapPin, Zap, Battery, Building2, Navigation, Play, AlertCircle, CheckCircle, Camera, QrCode } from 'lucide-react';
+import { Loader2, MapPin, Zap, Battery, Building2, Navigation, Play, AlertCircle, CheckCircle, QrCode } from 'lucide-react';
 import { api } from '../services/api';
 import { useSignalRContext } from '../contexts/SignalRContext';
 import { QRScanner } from '../components/QRScanner';
@@ -17,74 +17,251 @@ export const UserStations: React.FC = () => {
   const [stations, setStations] = useState<any[]>([]);
   const [selectedStation, setSelectedStation] = useState<any | null>(null);
   const [showStartDialog, setShowStartDialog] = useState(false);
-  const [connectors, setConnectors] = useState<any[]>([]);
+  const [chargingPoints, setChargingPoints] = useState<any[]>([]);
   const [myVehicles, setMyVehicles] = useState<any[]>([]);
-  const [selectedConnector, setSelectedConnector] = useState<string>('');
+  const [selectedChargingPoint, setSelectedChargingPoint] = useState<string>('');
   const [selectedVehicle, setSelectedVehicle] = useState<string>('');
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [scannedVehicle, setScannedVehicle] = useState<any | null>(null);
+  const [stationAvailability, setStationAvailability] = useState<Record<string, { hasAvailablePoints: boolean; isLoading: boolean }>>({});
 
-  useEffect(() => {
-    loadStations();
-    loadMyVehicles();
-  }, []);
-
-  // SignalR: Station Status Updates
-  useEffect(() => {
-    if (!isConnected) return;
-
-    const handleStationUpdate = (notification: any) => {
-      console.log('📡 Station Status Update received:', notification);
-      
-      setStations(prevStations => 
-        prevStations.map(station => 
-          station.id === notification.StationId 
-            ? { ...station, status: notification.Status }
-            : station
-        )
-      );
-    };
-
-    const unsubscribe = onStationStatusChanged(handleStationUpdate);
-    return () => unsubscribe();
-  }, [isConnected, onStationStatusChanged]);
-
-  // SignalR: Connector Status Updates
-  useEffect(() => {
-    if (!isConnected || connectors.length === 0) return;
-
-    const handleConnectorUpdate = (notification: any) => {
-      console.log('📡 Connector Status Update received:', notification);
-      
-      // Update connectors in dialog
-      setConnectors(prevConnectors =>
-        prevConnectors.map(connector =>
-          connector.id === notification.ConnectorId
-            ? { ...connector, status: notification.Status, isAvailable: notification.Status === 'Available' }
-            : connector
-        )
-      );
-    };
-
-    const unsubscribe = onConnectorStatusChanged(handleConnectorUpdate);
-    return () => unsubscribe();
-  }, [isConnected, onConnectorStatusChanged, connectors.length]);
-
-  const loadStations = async () => {
+  const loadStations = useCallback(async () => {
     try {
       setLoading(true);
       const data = await api.getUserAvailableStations();
       setStations(data);
+      
+      // Prüfe für jede Station, ob verfügbare Ladepunkte vorhanden sind
+      const availability: Record<string, { hasAvailablePoints: boolean; isLoading: boolean }> = {};
+      
+      for (const station of data) {
+        // Station muss verfügbar sein und online (lastHeartbeat innerhalb der letzten 10 Minuten)
+        const isStationOnline = station.lastHeartbeat && 
+          (new Date().getTime() - new Date(station.lastHeartbeat).getTime()) < 10 * 60 * 1000;
+        
+        const isStationAvailable = station.status !== 'Unavailable' && 
+                                   station.status !== 'OutOfOrder' && 
+                                   isStationOnline &&
+                                   station.chargeBoxId;
+        
+        if (isStationAvailable) {
+          availability[station.id] = { hasAvailablePoints: false, isLoading: true };
+          
+          // Lade Ladepunkte für diese Station
+          try {
+            const chargingPointsData = await api.getStationConnectors(station.id);
+            const availablePoints = chargingPointsData.filter((cp: any) => cp.isAvailable);
+            availability[station.id] = { 
+              hasAvailablePoints: availablePoints.length > 0, 
+              isLoading: false 
+            };
+          } catch (err) {
+            console.error(`Failed to load charging points for station ${station.id}:`, err);
+            availability[station.id] = { hasAvailablePoints: false, isLoading: false };
+          }
+        } else {
+          availability[station.id] = { hasAvailablePoints: false, isLoading: false };
+        }
+      }
+      
+      setStationAvailability(availability);
     } catch (error) {
       console.error('Failed to load stations:', error);
       setError('Fehler beim Laden der Ladestationen');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadStations();
+    loadMyVehicles();
+  }, [loadStations]);
+
+  // SignalR: Station Status Updates
+  useEffect(() => {
+    if (!isConnected) {
+      console.log('⚠️ SignalR nicht verbunden, warte auf Verbindung...');
+      return;
+    }
+
+    console.log('✅ SignalR verbunden, registriere Station Status Handler...');
+
+    const handleStationUpdate = async (notification: any) => {
+      console.log('📡 Station Status Update received:', notification);
+      console.log('🔍 StationId from notification:', notification.StationId, typeof notification.StationId);
+      console.log('🔍 Status:', notification.Status);
+      
+      const isUnavailable = notification.Status === 'Unavailable' || notification.Status === 'OutOfOrder';
+      const isAvailable = notification.Status === 'Available';
+      
+      // Aktualisiere Station-Status im State
+      setStations(prevStations => {
+        console.log('🔍 Current stations:', prevStations.map(s => ({ id: s.id, idType: typeof s.id, status: s.status, lastHeartbeat: s.lastHeartbeat })));
+        
+        const updated = prevStations.map(station => {
+          // Vergleiche IDs als Strings, da sie möglicherweise unterschiedliche Typen haben
+          const stationIdStr = String(station.id);
+          const notificationIdStr = String(notification.StationId);
+          const matches = stationIdStr === notificationIdStr || station.id === notification.StationId;
+          
+          if (matches) {
+            console.log('✅ Station gefunden und aktualisiert:', stationIdStr, '->', notification.Status);
+            // Wenn Station wieder online kommt, aktualisiere auch lastHeartbeat
+            const updatedStation: any = { ...station, status: notification.Status };
+            if (isAvailable) {
+              // Setze lastHeartbeat auf jetzt, wenn Station wieder online kommt
+              updatedStation.lastHeartbeat = new Date().toISOString();
+              console.log('🔄 LastHeartbeat aktualisiert für Station:', stationIdStr);
+            } else if (isUnavailable) {
+              // Entferne lastHeartbeat, wenn Station offline geht
+              updatedStation.lastHeartbeat = null;
+            }
+            return updatedStation;
+          }
+          return station;
+        });
+        
+        // Prüfe, ob eine Station aktualisiert wurde
+        const wasUpdated = updated.some((s, idx) => s.status !== prevStations[idx].status);
+        if (!wasUpdated) {
+          console.warn('⚠️ Keine Station mit ID', notification.StationId, 'gefunden!');
+        }
+        
+        return updated;
+      });
+      
+      // Wenn Station wieder verfügbar wird, aktualisiere auch Verfügbarkeitsprüfung
+      if (isAvailable) {
+        const stationIdForAvailability = notification.StationId;
+        console.log('🔄 Prüfe Verfügbarkeit für Station:', stationIdForAvailability);
+        
+        // Setze Verfügbarkeit auf "wird geprüft"
+        setStationAvailability(prev => ({
+          ...prev,
+          [stationIdForAvailability]: { hasAvailablePoints: false, isLoading: true }
+        }));
+        
+        // Lade Ladepunkte für diese Station asynchron
+        api.getStationConnectors(stationIdForAvailability)
+          .then(chargingPointsData => {
+            const availablePoints = chargingPointsData.filter((cp: any) => cp.isAvailable);
+            setStationAvailability(prev => ({
+              ...prev,
+              [stationIdForAvailability]: { 
+                hasAvailablePoints: availablePoints.length > 0, 
+                isLoading: false 
+              }
+            }));
+            console.log('✅ Verfügbarkeit aktualisiert für Station:', stationIdForAvailability, '- Verfügbare Punkte:', availablePoints.length);
+          })
+          .catch(err => {
+            console.error(`❌ Fehler beim Laden der Ladepunkte für Station ${stationIdForAvailability}:`, err);
+            setStationAvailability(prev => ({
+              ...prev,
+              [stationIdForAvailability]: { hasAvailablePoints: false, isLoading: false }
+            }));
+          });
+        
+        // Lade auch die vollständige Station-Liste neu, um sicherzustellen, dass alle Daten aktuell sind
+        console.log('🔄 Lade Station-Liste neu für vollständige Daten...');
+        await loadStations();
+      }
+      
+      // Wenn Station offline geht, aktualisiere Verfügbarkeit
+      if (isUnavailable) {
+        const stationIdForAvailability = notification.StationId;
+        setStationAvailability(prev => ({
+          ...prev,
+          [stationIdForAvailability]: { hasAvailablePoints: false, isLoading: false }
+        }));
+      }
+
+      // Wenn der Dialog für diese Station geöffnet ist, Ladepunkte neu laden
+      // Vergleiche IDs als Strings für konsistente Vergleichbarkeit
+      const selectedStationIdStr = selectedStation?.id ? String(selectedStation.id).toLowerCase() : null;
+      const notificationIdStrForDialog = String(notification.StationId).toLowerCase();
+      const isSelectedStation = selectedStationIdStr === notificationIdStrForDialog || selectedStation?.id === notification.StationId;
+      
+      if (isSelectedStation) {
+        if (isUnavailable) {
+          // Station ist nicht mehr verfügbar - alle Ladepunkte als nicht verfügbar markieren
+          setChargingPoints(prevPoints =>
+            prevPoints.map(point => ({
+              ...point,
+              isAvailable: false
+            }))
+          );
+        } else {
+          // Station ist wieder verfügbar - Ladepunkte neu laden
+          console.log('🔄 Station wieder verfügbar, lade Ladepunkte neu...');
+          try {
+            const chargingPointsData = await api.getStationConnectors(notification.StationId);
+            console.log('✅ Ladepunkte neu geladen:', chargingPointsData);
+            setChargingPoints(chargingPointsData);
+          } catch (err) {
+            console.error('❌ Fehler beim Neuladen der Ladepunkte:', err);
+          }
+        }
+      }
+      
+      // Wenn Station wieder verfügbar wird, Station-Liste aktualisieren (für LastHeartbeat etc.)
+      if (!isUnavailable && notification.Status === 'Available') {
+        console.log('🔄 Station wieder verfügbar, aktualisiere Station-Liste und Verfügbarkeit...');
+        // Station-Liste neu laden, um aktuelle Daten zu erhalten (inkl. lastHeartbeat)
+        await loadStations();
+      }
+    };
+
+    const unsubscribe = onStationStatusChanged(handleStationUpdate);
+    return () => unsubscribe();
+  }, [isConnected, onStationStatusChanged, selectedStation?.id, loadStations]);
+
+  // SignalR: ChargingPoint Status Updates (Connector Status wird jetzt für ChargingPoints verwendet)
+  useEffect(() => {
+    if (!isConnected || chargingPoints.length === 0) return;
+
+    const handleChargingPointUpdate = (notification: any) => {
+      console.log('📡 ChargingPoint Status Update received:', notification);
+      
+      // Update charging points in dialog
+      // WICHTIG: isAvailable sollte auch von der Station-Verbindung abhängen, nicht nur vom Status
+      setChargingPoints(prevPoints =>
+        prevPoints.map(point => {
+          if (point.id === notification.ConnectorId || point.id === notification.ChargingPointId) {
+            // Prüfe auch den Status der Station aus dem State
+            setStations(currentStations => {
+              const stationStatus = currentStations.find(s => s.id === selectedStation?.id)?.status;
+              const isStationAvailable = stationStatus !== 'Unavailable' && stationStatus !== 'OutOfOrder';
+              
+              return { 
+                ...point, 
+                status: notification.Status, 
+                isAvailable: notification.Status === 'Available' && isStationAvailable
+              };
+            });
+            
+            // Fallback: Verwende den aktuellen Station-Status aus dem State
+            const stationStatus = stations.find(s => s.id === selectedStation?.id)?.status;
+            const isStationAvailable = stationStatus !== 'Unavailable' && stationStatus !== 'OutOfOrder';
+            
+            return { 
+              ...point, 
+              status: notification.Status, 
+              isAvailable: notification.Status === 'Available' && isStationAvailable
+            };
+          }
+          return point;
+        })
+      );
+    };
+
+    const unsubscribe = onConnectorStatusChanged(handleChargingPointUpdate);
+    return () => unsubscribe();
+  }, [isConnected, onConnectorStatusChanged, chargingPoints.length, stations, selectedStation?.id]);
 
   const loadMyVehicles = async () => {
     try {
@@ -97,17 +274,44 @@ export const UserStations: React.FC = () => {
 
   const handleStartClick = async (station: any) => {
     setError(null);
+    
+    // Prüfe, ob Station verfügbar ist
+    if (station.status === 'Unavailable' || station.status === 'OutOfOrder') {
+      setError('Diese Ladestation ist derzeit nicht verfügbar');
+      return;
+    }
+    
     setSelectedStation(station);
     try {
-      const connectorsData = await api.getStationConnectors(station.id);
-      setConnectors(connectorsData);
+      const chargingPointsData = await api.getStationConnectors(station.id);
+      console.log('📡 ChargingPoints geladen:', chargingPointsData);
+      console.log('📊 Anzahl ChargingPoints gesamt:', chargingPointsData.length);
+      
+      const availablePoints = chargingPointsData.filter((cp: any) => cp.isAvailable);
+      console.log('✅ Verfügbare ChargingPoints:', availablePoints.length);
+      console.log('🔍 ChargingPoint Details:', chargingPointsData.map((cp: any) => ({
+        id: cp.id,
+        evseId: cp.evseId,
+        connectorId: cp.connectorId,
+        status: cp.status,
+        isAvailable: cp.isAvailable
+      })));
+      
+      // Prüfe, ob überhaupt verfügbare Ladepunkte vorhanden sind
+      if (availablePoints.length === 0) {
+        setError('Keine verfügbaren Ladepunkte an dieser Station');
+        return;
+      }
+      
+      setChargingPoints(chargingPointsData);
       setShowStartDialog(true);
-      setSelectedConnector('');
+      setSelectedChargingPoint('');
       setSelectedVehicle('');
       setShowQRScanner(false);
       setScannedVehicle(null);
     } catch (err: any) {
-      setError(err.message || 'Fehler beim Laden der Connectoren');
+      console.error('❌ Fehler beim Laden der ChargingPoints:', err);
+      setError(err.message || 'Fehler beim Laden der Ladepunkte');
     }
   };
 
@@ -140,15 +344,15 @@ export const UserStations: React.FC = () => {
   };
 
   const handleStartCharging = async () => {
-    if (!selectedConnector) {
-      setError('Bitte wählen Sie einen Connector');
+    if (!selectedChargingPoint) {
+      setError('Bitte wählen Sie einen Ladepunkt');
       return;
     }
 
     try {
       setStarting(true);
       setError(null);
-      await api.startChargingSession(selectedConnector, selectedVehicle || undefined);
+      await api.startChargingSession(selectedChargingPoint, selectedVehicle || undefined);
       setSuccess(`Ladevorgang erfolgreich gestartet an ${selectedStation?.name}`);
       setShowStartDialog(false);
       setScannedVehicle(null);
@@ -162,7 +366,17 @@ export const UserStations: React.FC = () => {
     }
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string, lastHeartbeat?: string, chargeBoxId?: string) => {
+    // Prüfe, ob Station offline ist (kein lastHeartbeat oder älter als 10 Minuten)
+    const isOffline = !lastHeartbeat || 
+      (new Date().getTime() - new Date(lastHeartbeat).getTime()) >= 10 * 60 * 1000 ||
+      !chargeBoxId;
+    
+    // Wenn Station offline ist, zeige grau
+    if (isOffline) {
+      return 'bg-gray-500';
+    }
+    
     const colors: Record<string, string> = {
       'Available': 'bg-green-500',
       'Occupied': 'bg-yellow-500',
@@ -242,7 +456,7 @@ export const UserStations: React.FC = () => {
                     <Zap className="h-5 w-5 text-blue-600" />
                     <CardTitle className="text-lg text-gray-900 dark:text-gray-100">{station.name}</CardTitle>
                   </div>
-                  <div className={`w-3 h-3 rounded-full ${getStatusColor(station.status)}`} />
+                  <div className={`w-3 h-3 rounded-full ${getStatusColor(station.status, station.lastHeartbeat, station.chargeBoxId)}`} />
                 </div>
                 <CardDescription className="text-xs">
                   ID: {station.stationId}
@@ -296,13 +510,42 @@ export const UserStations: React.FC = () => {
 
                 {/* Action Buttons */}
                 <div className="flex gap-2">
-                  <Button
-                    onClick={() => handleStartClick(station)}
-                    className="flex-1 bg-primary hover:bg-primary/90"
-                  >
-                    <Play className="h-4 w-4 mr-2" />
-                    Laden starten
-                  </Button>
+                  {(() => {
+                    const isStationUnavailable = station.status === 'Unavailable' || station.status === 'OutOfOrder';
+                    const isStationOffline = !station.lastHeartbeat || 
+                      (new Date().getTime() - new Date(station.lastHeartbeat).getTime()) >= 10 * 60 * 1000;
+                    const hasNoChargeBoxId = !station.chargeBoxId;
+                    const availability = stationAvailability[station.id];
+                    const hasNoAvailablePoints = availability && !availability.hasAvailablePoints && !availability.isLoading;
+                    const isLoadingAvailability = availability?.isLoading;
+                    
+                    const isDisabled = isStationUnavailable || isStationOffline || hasNoChargeBoxId || hasNoAvailablePoints || isLoadingAvailability;
+                    
+                    let disabledTitle = '';
+                    if (isStationUnavailable) {
+                      disabledTitle = 'Ladestation ist nicht verfügbar';
+                    } else if (isStationOffline) {
+                      disabledTitle = 'Ladestation ist offline';
+                    } else if (hasNoChargeBoxId) {
+                      disabledTitle = 'Ladestation ist nicht mit OCPP verbunden';
+                    } else if (isLoadingAvailability) {
+                      disabledTitle = 'Prüfe Verfügbarkeit...';
+                    } else if (hasNoAvailablePoints) {
+                      disabledTitle = 'Keine verfügbaren Ladepunkte';
+                    }
+                    
+                    return (
+                      <Button
+                        onClick={() => handleStartClick(station)}
+                        className="flex-1 bg-primary hover:bg-primary/90"
+                        disabled={isDisabled}
+                        title={disabledTitle}
+                      >
+                        <Play className="h-4 w-4 mr-2" />
+                        {isLoadingAvailability ? 'Prüfe...' : 'Laden starten'}
+                      </Button>
+                    );
+                  })()}
                   {station.latitude && station.longitude && (
                     <Button
                       variant="outline"
@@ -339,7 +582,7 @@ export const UserStations: React.FC = () => {
 
       {/* Start Charging Dialog */}
       <Dialog open={showStartDialog} onOpenChange={setShowStartDialog}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[500px] p-5">
           <DialogHeader>
             <DialogTitle>Ladevorgang starten</DialogTitle>
             <DialogDescription>
@@ -355,20 +598,27 @@ export const UserStations: React.FC = () => {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="connector">Connector auswählen*</Label>
-              <Select value={selectedConnector} onValueChange={setSelectedConnector}>
+              <Label htmlFor="chargingPoint">Ladepunkt auswählen*</Label>
+              <Select value={selectedChargingPoint} onValueChange={setSelectedChargingPoint}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Bitte Connector wählen" />
+                  <SelectValue placeholder="Bitte Ladepunkt wählen" />
                 </SelectTrigger>
                 <SelectContent>
-                  {connectors.filter(c => c.isAvailable).length === 0 ? (
-                    <SelectItem value="none" disabled>Keine verfügbaren Connectoren</SelectItem>
+                  {chargingPoints.length === 0 ? (
+                    <SelectItem value="none" disabled>Keine Ladepunkte vorhanden</SelectItem>
+                  ) : chargingPoints.filter((point: any) => point.isAvailable).length === 0 ? (
+                    <SelectItem value="none" disabled>Keine verfügbaren Ladepunkte</SelectItem>
                   ) : (
-                    connectors.filter(c => c.isAvailable).map((connector) => (
-                      <SelectItem key={connector.id} value={connector.id}>
-                        EVSE {connector.evseId} - Connector {connector.connectorId} ({connector.type}, {connector.maxPower}kW)
-                      </SelectItem>
-                    ))
+                    chargingPoints
+                      .filter((point: any) => point.isAvailable)
+                      .map((point) => (
+                        <SelectItem 
+                          key={point.id} 
+                          value={point.id}
+                        >
+                          EVSE {point.evseId} - {point.pointName || `Ladepunkt ${point.evseId}`} ({point.type}, {point.maxPower}kW)
+                        </SelectItem>
+                      ))
                   )}
                 </SelectContent>
               </Select>
@@ -429,16 +679,19 @@ export const UserStations: React.FC = () => {
               </div>
             )}
 
-            {connectors.length > 0 && (
+            {chargingPoints.length > 0 && (
               <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-                <h4 className="font-semibold text-sm text-blue-900 dark:text-blue-100 mb-2">Verfügbare Connectoren:</h4>
+                <h4 className="font-semibold text-sm text-blue-900 dark:text-blue-100 mb-2">
+                  Ladepunkte ({chargingPoints.filter((cp: any) => cp.isAvailable).length} verfügbar von {chargingPoints.length}):
+                </h4>
                 <div className="space-y-2">
-                  {connectors.map((connector) => (
-                    <div key={connector.id} className="flex justify-between items-center text-sm">
-                      <span className="text-blue-800 dark:text-blue-200">
-                        EVSE {connector.evseId} - Connector {connector.connectorId} ({connector.type})
+                  {chargingPoints.map((point) => (
+                    <div key={point.id} className={`flex justify-between items-center text-sm ${!point.isAvailable ? 'opacity-50' : ''}`}>
+                      <span className={`${point.isAvailable ? 'text-blue-800 dark:text-blue-200' : 'text-gray-500 dark:text-gray-400'}`}>
+                        EVSE {point.evseId} - {point.pointName || `Ladepunkt ${point.evseId}`} ({point.type})
+                        {!point.isAvailable && ` - Nicht verfügbar (${point.status})`}
                       </span>
-                      {getConnectorStatusBadge(connector.status)}
+                      {getConnectorStatusBadge(point.status)}
                     </div>
                   ))}
                 </div>
@@ -451,7 +704,8 @@ export const UserStations: React.FC = () => {
             </Button>
             <Button
               onClick={handleStartCharging}
-              disabled={!selectedConnector || starting}
+              disabled={!selectedChargingPoint || starting || chargingPoints.filter((cp: any) => cp.isAvailable).length === 0}
+              title={chargingPoints.filter((cp: any) => cp.isAvailable).length === 0 ? 'Keine verfügbaren Ladepunkte' : !selectedChargingPoint ? 'Bitte wählen Sie einen Ladepunkt' : ''}
             >
               {starting ? (
                 <>

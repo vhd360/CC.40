@@ -4,16 +4,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Zap, MapPin, Battery, Clock, Loader2, Eye, Building2, Layers, ArrowLeft, Plus } from 'lucide-react';
+import { Zap, Battery, Clock, Loader2, Eye, Building2, Layers, ArrowLeft, Plus, Trash2 } from 'lucide-react';
 import { api } from '../services/api';
 import { useSignalRContext } from '../contexts/SignalRContext';
+import { useToast } from '../components/ui/toast';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
 export const ChargingStations: React.FC = () => {
   const { isConnected, onStationStatusChanged } = useSignalRContext();
+  const { showToast } = useToast();
   const [stations, setStations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [chargingParks, setChargingParks] = useState<any[]>([]);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; stationId: string | null; stationName: string }>({
+    open: false,
+    stationId: null,
+    stationName: ''
+  });
   const [formData, setFormData] = useState({
     chargingParkId: '',
     stationId: '',
@@ -94,7 +102,7 @@ export const ChargingStations: React.FC = () => {
         numberOfConnectors: parseInt(formData.numberOfConnectors)
       });
 
-      alert('Ladestation erfolgreich erstellt!');
+      showToast('Ladestation erfolgreich erstellt!', 'success');
       setShowForm(false);
       setFormData({
         chargingParkId: '',
@@ -109,7 +117,30 @@ export const ChargingStations: React.FC = () => {
       loadStations();
     } catch (error: any) {
       console.error('Failed to create charging station:', error);
-      alert(error.message || 'Fehler beim Erstellen der Ladestation');
+      showToast(error.message || 'Fehler beim Erstellen der Ladestation', 'error');
+    }
+  };
+
+  const handleDeleteClick = (id: string, name: string) => {
+    setDeleteConfirm({
+      open: true,
+      stationId: id,
+      stationName: name
+    });
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirm.stationId) return;
+    
+    try {
+      await api.deleteChargingStation(deleteConfirm.stationId);
+      showToast('Ladestation erfolgreich gelöscht', 'success');
+      loadStations();
+    } catch (error: any) {
+      console.error('Failed to delete charging station:', error);
+      showToast(error.message || 'Fehler beim Löschen der Ladestation', 'error');
+    } finally {
+      setDeleteConfirm({ open: false, stationId: null, stationName: '' });
     }
   };
 
@@ -378,6 +409,14 @@ export const ChargingStations: React.FC = () => {
                     <Eye className="h-4 w-4 mr-1" />
                     Details
                   </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleDeleteClick(station.id, station.name)}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -396,6 +435,18 @@ export const ChargingStations: React.FC = () => {
           </CardContent>
         </Card>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        open={deleteConfirm.open}
+        onOpenChange={(open) => setDeleteConfirm({ ...deleteConfirm, open })}
+        title="Ladestation löschen"
+        message={`Möchten Sie die Ladestation "${deleteConfirm.stationName}" wirklich löschen? Alle Ladepunkte werden ebenfalls deaktiviert. Diese Aktion kann nicht rückgängig gemacht werden.`}
+        confirmText="Löschen"
+        cancelText="Abbrechen"
+        variant="destructive"
+        onConfirm={handleDeleteConfirm}
+      />
     </div>
   );
 };

@@ -6,7 +6,8 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Dialog, DialogContent } from '../components/ui/dialog';
 import { ChargingPointForm, ChargingPointFormData } from '../components/ChargingPointForm';
-import { ConnectorForm, ConnectorFormData } from '../components/ConnectorForm';
+import { useToast } from '../components/ui/toast';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { 
   Loader2, 
   ArrowLeft, 
@@ -21,7 +22,6 @@ import {
   Plus,
   Trash2
 } from 'lucide-react';
-import { api } from '../services/api';
 
 export const ChargingStationDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -33,10 +33,13 @@ export const ChargingStationDetail: React.FC = () => {
   
   // Dialog states
   const [showChargingPointDialog, setShowChargingPointDialog] = useState(false);
-  const [showConnectorDialog, setShowConnectorDialog] = useState(false);
-  const [selectedChargingPoint, setSelectedChargingPoint] = useState<any>(null);
   const [editingChargingPoint, setEditingChargingPoint] = useState<any>(null);
-  const [editingConnector, setEditingConnector] = useState<any>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; type: 'station' | 'chargingPoint' | 'group'; id: string | null; name?: string }>({
+    open: false,
+    type: 'station',
+    id: null
+  });
+  const { showToast } = useToast();
 
   const loadStation = async () => {
     try {
@@ -120,38 +123,75 @@ export const ChargingStationDetail: React.FC = () => {
       
       setIsEditing(false);
       loadStation();
+      showToast('Ladestation erfolgreich gespeichert', 'success');
     } catch (error) {
       console.error('Failed to save station:', error);
-      alert('Fehler beim Speichern der Ladestation');
+      showToast('Fehler beim Speichern der Ladestation', 'error');
     }
   };
 
   const handleAddToGroup = async (groupId: string) => {
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch(
         `http://localhost:5126/api/charging-station-groups/${groupId}/stations/${id}`,
-        { method: 'POST' }
+        { 
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
       );
-      if (!response.ok) throw new Error('Failed to add station to group');
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Server error:', errorText);
+        throw new Error(`Failed to add station to group: ${errorText}`);
+      }
       loadStation();
+      showToast('Ladestation erfolgreich zur Gruppe hinzugefügt', 'success');
     } catch (error) {
       console.error('Failed to add to group:', error);
-      alert('Fehler beim Hinzufügen zur Gruppe');
+      showToast('Fehler beim Hinzufügen zur Gruppe', 'error');
     }
   };
 
-  const handleRemoveFromGroup = async (groupId: string) => {
-    if (!window.confirm('Möchten Sie diese Ladestation wirklich aus der Gruppe entfernen?')) return;
+  const handleRemoveFromGroup = (groupId: string) => {
+    const group = station.groups?.find((g: any) => g.id === groupId);
+    setDeleteConfirm({
+      open: true,
+      type: 'group',
+      id: groupId,
+      name: group?.name
+    });
+  };
+
+  const handleRemoveFromGroupConfirm = async () => {
+    if (!deleteConfirm.id || deleteConfirm.type !== 'group') return;
     try {
+      const token = localStorage.getItem('token');
       const response = await fetch(
-        `http://localhost:5126/api/charging-station-groups/${groupId}/stations/${id}`,
-        { method: 'DELETE' }
+        `http://localhost:5126/api/charging-station-groups/${deleteConfirm.id}/stations/${id}`,
+        { 
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
       );
-      if (!response.ok) throw new Error('Failed to remove station from group');
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Server error:', errorText);
+        throw new Error(`Failed to remove station from group: ${errorText}`);
+      }
       loadStation();
+      showToast('Ladestation erfolgreich aus der Gruppe entfernt', 'success');
     } catch (error) {
       console.error('Failed to remove from group:', error);
-      alert('Fehler beim Entfernen aus der Gruppe');
+      showToast('Fehler beim Entfernen aus der Gruppe', 'error');
+    } finally {
+      setDeleteConfirm({ open: false, type: 'station', id: null });
     }
   };
 
@@ -162,7 +202,24 @@ export const ChargingStationDetail: React.FC = () => {
   };
 
   const handleEditChargingPoint = (point: any) => {
-    setEditingChargingPoint(point);
+    // Convert status string to number for the form
+    const statusMap: Record<string, number> = {
+      'Available': 0,
+      'Occupied': 1,
+      'Charging': 2,
+      'Reserved': 3,
+      'Faulted': 4,
+      'Unavailable': 5,
+      'Preparing': 6,
+      'Finishing': 7
+    };
+    
+    const editData = {
+      ...point,
+      status: typeof point.status === 'string' ? statusMap[point.status] || 0 : point.status
+    };
+    
+    setEditingChargingPoint(editData);
     setShowChargingPointDialog(true);
   };
 
@@ -173,88 +230,129 @@ export const ChargingStationDetail: React.FC = () => {
         ? `http://localhost:5126/api/charging-points/${editingChargingPoint.id}`
         : `http://localhost:5126/api/charging-points`;
       
+      // Convert camelCase to PascalCase for backend
+      const dto = {
+        ChargingStationId: data.chargingStationId,
+        EvseId: data.evseId,
+        EvseIdExternal: data.evseIdExternal || null,
+        Name: data.name,
+        Description: data.description || null,
+        MaxPower: data.maxPower,
+        Status: data.status,
+        // Connector-Eigenschaften
+        ConnectorType: data.connectorType || 'Type2',
+        ConnectorFormat: data.connectorFormat || null,
+        PowerType: data.powerType || null,
+        MaxCurrent: data.maxCurrent || 32,
+        MaxVoltage: data.maxVoltage || 230,
+        PhysicalReference: data.physicalReference || null,
+        // Funktionen
+        PublicKey: data.publicKey || null,
+        CertificateChain: data.certificateChain || null,
+        SupportsSmartCharging: data.supportsSmartCharging,
+        SupportsRemoteStartStop: data.supportsRemoteStartStop,
+        SupportsReservation: data.supportsReservation,
+        TariffInfo: data.tariffInfo || null,
+        Notes: data.notes || null
+      };
+      
       const response = await fetch(url, {
         method: editingChargingPoint ? 'PUT' : 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(data)
+        body: JSON.stringify(dto)
       });
 
-      if (!response.ok) throw new Error('Failed to save charging point');
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Server error:', errorText);
+        throw new Error('Failed to save charging point');
+      }
       
       setShowChargingPointDialog(false);
       setEditingChargingPoint(null);
       loadStation();
+      showToast(editingChargingPoint ? 'Ladepunkt erfolgreich aktualisiert' : 'Ladepunkt erfolgreich erstellt', 'success');
     } catch (error) {
       console.error('Failed to save charging point:', error);
-      alert('Fehler beim Speichern des Ladepunkts');
+      showToast('Fehler beim Speichern des Ladepunkts', 'error');
     }
   };
 
-  const handleDeleteChargingPoint = async (pointId: string) => {
-    if (!window.confirm('Möchten Sie diesen Ladepunkt wirklich löschen?')) return;
+  const handleDeleteChargingPoint = (pointId: string) => {
+    const point = station.chargingPoints?.find((p: any) => p.id === pointId);
+    setDeleteConfirm({
+      open: true,
+      type: 'chargingPoint',
+      id: pointId,
+      name: point?.name
+    });
+  };
+
+  const handleDeleteChargingPointConfirm = async () => {
+    if (!deleteConfirm.id || deleteConfirm.type !== 'chargingPoint') return;
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5126/api/charging-points/${pointId}`, {
+      const response = await fetch(`http://localhost:5126/api/charging-points/${deleteConfirm.id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (!response.ok) throw new Error('Failed to delete charging point');
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Server error:', errorText);
+        throw new Error('Failed to delete charging point');
+      }
       loadStation();
+      showToast('Ladepunkt erfolgreich gelöscht', 'success');
     } catch (error) {
       console.error('Failed to delete charging point:', error);
-      alert('Fehler beim Löschen des Ladepunkts');
+      showToast('Fehler beim Löschen des Ladepunkts', 'error');
+    } finally {
+      setDeleteConfirm({ open: false, type: 'station', id: null });
     }
   };
 
-  // Connector handlers
-  const handleAddConnector = (chargingPoint: any) => {
-    setSelectedChargingPoint(chargingPoint);
-    setEditingConnector(null);
-    setShowConnectorDialog(true);
+
+  const handleDeleteStation = () => {
+    setDeleteConfirm({
+      open: true,
+      type: 'station',
+      id: id || null,
+      name: station?.name
+    });
   };
 
-  const handleEditConnector = (chargingPoint: any, connector: any) => {
-    setSelectedChargingPoint(chargingPoint);
-    setEditingConnector(connector);
-    setShowConnectorDialog(true);
-  };
-
-  const handleSubmitConnector = async (data: ConnectorFormData) => {
+  const handleDeleteStationConfirm = async () => {
+    if (!deleteConfirm.id || deleteConfirm.type !== 'station') return;
     try {
       const token = localStorage.getItem('token');
-      const url = editingConnector
-        ? `http://localhost:5126/api/connectors/${editingConnector.id}`
-        : `http://localhost:5126/api/connectors`;
-      
-      const response = await fetch(url, {
-        method: editingConnector ? 'PUT' : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(data)
+      const response = await fetch(`http://localhost:5126/api/charging-stations/${deleteConfirm.id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-
-      if (!response.ok) throw new Error('Failed to save connector');
-      
-      setShowConnectorDialog(false);
-      setEditingConnector(null);
-      setSelectedChargingPoint(null);
-      loadStation();
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Server error:', errorText);
+        throw new Error('Failed to delete charging station');
+      }
+      showToast('Ladestation erfolgreich gelöscht', 'success');
+      navigate('/charging-stations');
     } catch (error) {
-      console.error('Failed to save connector:', error);
-      alert('Fehler beim Speichern des Steckers');
+      console.error('Failed to delete charging station:', error);
+      showToast('Fehler beim Löschen der Ladestation', 'error');
+    } finally {
+      setDeleteConfirm({ open: false, type: 'station', id: null });
     }
   };
+
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-        <span className="ml-2 text-gray-600">Lade Ladestation...</span>
+        <span className="ml-2 text-gray-600 dark:text-gray-400">Lade Ladestation...</span>
       </div>
     );
   }
@@ -262,7 +360,7 @@ export const ChargingStationDetail: React.FC = () => {
   if (!station) {
     return (
       <div className="text-center py-12">
-        <h2 className="text-2xl font-bold text-gray-900">Ladestation nicht gefunden</h2>
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Ladestation nicht gefunden</h2>
         <Button onClick={() => navigate('/charging-stations')} className="mt-4">
           Zurück zur Übersicht
         </Button>
@@ -274,8 +372,8 @@ export const ChargingStationDetail: React.FC = () => {
     'Available': 'bg-green-100 text-green-800',
     'Occupied': 'bg-yellow-100 text-yellow-800',
     'OutOfOrder': 'bg-red-100 text-red-800',
-    'Reserved': 'bg-blue-100 text-blue-800',
-    'Unavailable': 'bg-gray-100 text-gray-800'
+    'Reserved': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+    'Unavailable': 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
   };
 
   return (
@@ -287,15 +385,25 @@ export const ChargingStationDetail: React.FC = () => {
             Zurück
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">{station.name}</h1>
-            <p className="text-gray-600 mt-1">ID: {station.stationId}</p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{station.name}</h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">ID: {station.stationId}</p>
           </div>
         </div>
         {!isEditing ? (
-          <Button onClick={() => setIsEditing(true)}>
-            <Edit className="h-4 w-4 mr-2" />
-            Bearbeiten
-          </Button>
+          <div className="flex space-x-2">
+            <Button onClick={() => setIsEditing(true)}>
+              <Edit className="h-4 w-4 mr-2" />
+              Bearbeiten
+            </Button>
+            <Button 
+              variant="outline" 
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              onClick={handleDeleteStation}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Löschen
+            </Button>
+          </div>
         ) : (
           <div className="flex space-x-2">
             <Button onClick={handleSave}>
@@ -397,7 +505,7 @@ export const ChargingStationDetail: React.FC = () => {
             ) : (
               <>
                 <div>
-                  <span className="text-sm text-gray-600">Status</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Status</span>
                   <div className="mt-1">
                     <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${statusColors[station.status]}`}>
                       {station.status}
@@ -405,29 +513,29 @@ export const ChargingStationDetail: React.FC = () => {
                   </div>
                 </div>
                 <div>
-                  <span className="text-sm text-gray-600">Hersteller</span>
-                  <div className="text-sm font-medium mt-1">{station.vendor}</div>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Hersteller</span>
+                  <div className="text-sm font-medium mt-1 text-gray-900 dark:text-gray-100">{station.vendor}</div>
                 </div>
                 <div>
-                  <span className="text-sm text-gray-600">Modell</span>
-                  <div className="text-sm font-medium mt-1">{station.model}</div>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Modell</span>
+                  <div className="text-sm font-medium mt-1 text-gray-900 dark:text-gray-100">{station.model}</div>
                 </div>
                 <div>
-                  <span className="text-sm text-gray-600">Typ</span>
-                  <div className="text-sm font-medium mt-1">{station.type}</div>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Typ</span>
+                  <div className="text-sm font-medium mt-1 text-gray-900 dark:text-gray-100">{station.type}</div>
                 </div>
                 <div>
-                  <span className="text-sm text-gray-600">Maximale Leistung</span>
-                  <div className="text-sm font-medium mt-1">{station.maxPower} kW</div>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Maximale Leistung</span>
+                  <div className="text-sm font-medium mt-1 text-gray-900 dark:text-gray-100">{station.maxPower} kW</div>
                 </div>
                 <div>
-                  <span className="text-sm text-gray-600">Anzahl Anschlüsse</span>
-                  <div className="text-sm font-medium mt-1">{station.numberOfConnectors}</div>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Anzahl Anschlüsse</span>
+                  <div className="text-sm font-medium mt-1 text-gray-900 dark:text-gray-100">{station.numberOfConnectors}</div>
                 </div>
                 {station.lastHeartbeat && (
                   <div>
-                    <span className="text-sm text-gray-600">Letzter Heartbeat</span>
-                    <div className="text-sm font-medium mt-1">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Letzter Heartbeat</span>
+                    <div className="text-sm font-medium mt-1 text-gray-900 dark:text-gray-100">
                       {new Date(station.lastHeartbeat).toLocaleString('de-DE')}
                     </div>
                   </div>
@@ -462,7 +570,7 @@ export const ChargingStationDetail: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, chargeBoxId: e.target.value })}
                     placeholder="z.B. CP001, STATION-001"
                   />
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
                     Eindeutige ID für OCPP-Authentifizierung
                   </p>
                 </div>
@@ -498,7 +606,7 @@ export const ChargingStationDetail: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, ocppEndpoint: e.target.value })}
                     placeholder="ws://localhost:8080/ocpp oder wss://..."
                   />
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
                     WebSocket-URL des OCPP-Servers
                   </p>
                 </div>
@@ -508,32 +616,32 @@ export const ChargingStationDetail: React.FC = () => {
                 {station.chargeBoxId ? (
                   <>
                     <div>
-                      <span className="text-sm text-gray-600">ChargeBox-ID</span>
-                      <div className="text-sm font-mono bg-gray-100 px-2 py-1 rounded mt-1">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">ChargeBox-ID</span>
+                      <div className="text-sm font-mono bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2 py-1 rounded mt-1">
                         {station.chargeBoxId}
                       </div>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-600">Passwort</span>
-                      <div className="text-sm font-medium mt-1">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">Passwort</span>
+                      <div className="text-sm font-medium mt-1 text-gray-900 dark:text-gray-100">
                         {station.ocppPassword ? '••••••••' : 'Nicht gesetzt'}
                       </div>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-600">Protokoll</span>
-                      <div className="text-sm font-medium mt-1">{station.ocppProtocol || 'Nicht konfiguriert'}</div>
+                      <span className="text-sm text-gray-600 dark:text-gray-400">Protokoll</span>
+                      <div className="text-sm font-medium mt-1 text-gray-900 dark:text-gray-100">{station.ocppProtocol || 'Nicht konfiguriert'}</div>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-600">Server-Endpoint</span>
-                      <div className="text-sm font-mono bg-gray-100 px-2 py-1 rounded mt-1 break-all">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">Server-Endpoint</span>
+                      <div className="text-sm font-mono bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2 py-1 rounded mt-1 break-all">
                         {station.ocppEndpoint || 'Nicht konfiguriert'}
                       </div>
                     </div>
                   </>
                 ) : (
-                  <div className="text-center py-6 bg-yellow-50 rounded-lg">
-                    <Key className="h-12 w-12 text-yellow-600 mx-auto mb-2" />
-                    <p className="text-sm text-gray-600">OCPP noch nicht konfiguriert</p>
+                  <div className="text-center py-6 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                    <Key className="h-12 w-12 text-yellow-600 dark:text-yellow-400 mx-auto mb-2" />
+                    <p className="text-sm text-gray-600 dark:text-gray-400">OCPP noch nicht konfiguriert</p>
                     <Button 
                       size="sm" 
                       className="mt-2"
@@ -558,11 +666,11 @@ export const ChargingStationDetail: React.FC = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <span className="text-sm text-gray-600">Ladepark</span>
-              <div className="text-sm font-medium mt-1">
+              <span className="text-sm text-gray-600 dark:text-gray-400">Ladepark</span>
+              <div className="text-sm font-medium mt-1 text-gray-900 dark:text-gray-100">
                 {station.chargingPark.name}
               </div>
-              <div className="text-xs text-gray-500 mt-1">
+              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 {station.chargingPark.address}, {station.chargingPark.city}
               </div>
             </div>
@@ -595,8 +703,8 @@ export const ChargingStationDetail: React.FC = () => {
               <>
                 {station.latitude && station.longitude && (
                   <div>
-                    <span className="text-sm text-gray-600">Koordinaten</span>
-                    <div className="text-sm font-mono bg-gray-100 px-2 py-1 rounded mt-1">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Koordinaten</span>
+                    <div className="text-sm font-mono bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-2 py-1 rounded mt-1">
                       {station.latitude}, {station.longitude}
                     </div>
                   </div>
@@ -621,13 +729,13 @@ export const ChargingStationDetail: React.FC = () => {
             {station.groups && station.groups.length > 0 ? (
               <div className="space-y-2">
                 {station.groups.map((group: any) => (
-                  <div key={group.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div key={group.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                     <div>
-                      <div className="font-medium">{group.name}</div>
+                      <div className="font-medium text-gray-900 dark:text-gray-100">{group.name}</div>
                       {group.description && (
-                        <div className="text-xs text-gray-500">{group.description}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">{group.description}</div>
                       )}
-                      <div className="text-xs text-gray-400 mt-1">
+                      <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                         Zugeordnet: {new Date(group.assignedAt).toLocaleDateString('de-DE')}
                       </div>
                     </div>
@@ -635,7 +743,7 @@ export const ChargingStationDetail: React.FC = () => {
                       variant="outline"
                       size="sm"
                       onClick={() => handleRemoveFromGroup(group.id)}
-                      className="text-red-600 hover:text-red-700"
+                      className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -643,7 +751,7 @@ export const ChargingStationDetail: React.FC = () => {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-500">Keiner Gruppe zugeordnet</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Keiner Gruppe zugeordnet</p>
             )}
 
             {station.availableGroups && station.availableGroups.length > 0 && (
@@ -681,36 +789,36 @@ export const ChargingStationDetail: React.FC = () => {
       </div>
 
       {/* Ladepunkte (EVSE) */}
-      {station.chargingPoints && station.chargingPoints.length > 0 && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Ladepunkte (EVSE) ({station.chargingPoints.length})</CardTitle>
-                <CardDescription className="mt-1">
-                  Jeder Ladepunkt kann mehrere Stecker haben
-                </CardDescription>
-              </div>
-              <Button size="sm" onClick={handleAddChargingPoint}>
-                <Plus className="h-4 w-4 mr-2" />
-                Ladepunkt hinzufügen
-              </Button>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Ladepunkte (EVSE) ({station.chargingPoints?.length || 0})</CardTitle>
+              <CardDescription className="mt-1">
+                Jeder Ladepunkt kann mehrere Stecker haben
+              </CardDescription>
             </div>
-          </CardHeader>
-          <CardContent>
+            <Button size="sm" onClick={handleAddChargingPoint}>
+              <Plus className="h-4 w-4 mr-2" />
+              Ladepunkt hinzufügen
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {station.chargingPoints && station.chargingPoints.length > 0 ? (
             <div className="space-y-6">
               {station.chargingPoints.map((point: any) => (
-                <div key={point.id} className="border rounded-lg p-4 bg-gray-50">
+                <div key={point.id} className="border rounded-lg p-4 bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700">
                   <div className="flex items-center justify-between mb-4">
                     <div>
-                      <div className="font-medium text-lg">{point.name}</div>
+                      <div className="font-medium text-lg text-gray-900 dark:text-gray-100">{point.name}</div>
                       <div className="flex items-center space-x-4 mt-1">
-                        <span className="text-sm text-gray-600">
-                          EVSE-ID: <span className="font-mono font-medium">{point.evseId}</span>
+                        <span className="text-sm text-gray-600 dark:text-gray-400">
+                          EVSE-ID: <span className="font-mono font-medium text-gray-900 dark:text-gray-100">{point.evseId}</span>
                         </span>
                         {point.evseIdExternal && (
-                          <span className="text-sm text-gray-600">
-                            Externe ID: <span className="font-mono">{point.evseIdExternal}</span>
+                          <span className="text-sm text-gray-600 dark:text-gray-400">
+                            Externe ID: <span className="font-mono text-gray-900 dark:text-gray-100">{point.evseIdExternal}</span>
                           </span>
                         )}
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[point.status]}`}>
@@ -735,80 +843,92 @@ export const ChargingStationDetail: React.FC = () => {
 
                   <div className="grid grid-cols-4 gap-4 mb-4 text-sm">
                     <div>
-                      <span className="text-gray-600">Max. Leistung</span>
-                      <div className="font-medium">{point.maxPower} kW</div>
+                      <span className="text-gray-600 dark:text-gray-400">Max. Leistung</span>
+                      <div className="font-medium text-gray-900 dark:text-gray-100">{point.maxPower} kW</div>
                     </div>
                     <div>
-                      <span className="text-gray-600">Smart Charging</span>
-                      <div className="font-medium">{point.supportsSmartCharging ? '✓ Ja' : '✗ Nein'}</div>
+                      <span className="text-gray-600 dark:text-gray-400">Smart Charging</span>
+                      <div className="font-medium text-gray-900 dark:text-gray-100">{point.supportsSmartCharging ? '✓ Ja' : '✗ Nein'}</div>
                     </div>
                     <div>
-                      <span className="text-gray-600">Remote Start/Stop</span>
-                      <div className="font-medium">{point.supportsRemoteStartStop ? '✓ Ja' : '✗ Nein'}</div>
+                      <span className="text-gray-600 dark:text-gray-400">Remote Start/Stop</span>
+                      <div className="font-medium text-gray-900 dark:text-gray-100">{point.supportsRemoteStartStop ? '✓ Ja' : '✗ Nein'}</div>
                     </div>
                     <div>
-                      <span className="text-gray-600">Reservierung</span>
-                      <div className="font-medium">{point.supportsReservation ? '✓ Ja' : '✗ Nein'}</div>
+                      <span className="text-gray-600 dark:text-gray-400">Reservierung</span>
+                      <div className="font-medium text-gray-900 dark:text-gray-100">{point.supportsReservation ? '✓ Ja' : '✗ Nein'}</div>
                     </div>
                   </div>
 
                   {point.publicKey && (
-                    <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-                      <div className="flex items-center text-sm text-blue-800">
+                    <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <div className="flex items-center text-sm text-blue-800 dark:text-blue-200">
                         <Key className="h-4 w-4 mr-2" />
                         <span className="font-medium">Plug & Charge aktiviert</span>
                       </div>
-                      <div className="text-xs text-blue-600 mt-1">
+                      <div className="text-xs text-blue-600 dark:text-blue-300 mt-1">
                         ISO 15118 Zertifikat konfiguriert
                       </div>
                     </div>
                   )}
 
-                  {/* Connectors innerhalb des ChargingPoints */}
-                  {point.connectors && point.connectors.length > 0 && (
-                    <div>
-                      <div className="text-sm font-medium mb-2 flex items-center justify-between">
-                        <span>Stecker ({point.connectors.length})</span>
-                        <Button variant="outline" size="sm" onClick={() => handleAddConnector(point)}>
-                          <Plus className="h-3 w-3 mr-1" />
-                          Stecker hinzufügen
-                        </Button>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {point.connectors.map((connector: any) => (
-                          <div key={connector.id} className="p-3 border rounded-lg bg-white">
-                            <div className="flex items-center justify-between">
-                              <div className="font-medium">Stecker #{connector.connectorId}</div>
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[connector.status]}`}>
-                                {connector.status}
-                              </span>
-                            </div>
-                            <div className="text-sm text-gray-600 mt-2 space-y-1">
-                              <div>Typ: <span className="font-medium">{connector.connectorType}</span></div>
-                              {connector.powerType && (
-                                <div>Strom: <span className="font-medium">{connector.powerType}</span></div>
-                              )}
-                              <div>Leistung: <span className="font-medium">{connector.maxPower} kW</span></div>
-                              <div>
-                                <span className="font-medium">{connector.maxCurrent}A @ {connector.maxVoltage}V</span>
-                              </div>
-                              {connector.physicalReference && (
-                                <div className="text-xs text-gray-500 mt-1">
-                                  Ref: {connector.physicalReference}
-                                </div>
-                              )}
-                            </div>
+                  {/* Connector-Eigenschaften (jetzt Teil des ChargingPoints) */}
+                  {point.connectorType && (
+                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                      <div className="text-sm font-medium mb-3 text-gray-900 dark:text-gray-100">Stecker-Eigenschaften</div>
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <span className="text-gray-600 dark:text-gray-400">Typ:</span>{' '}
+                          <span className="font-medium text-gray-900 dark:text-gray-100">{point.connectorType}</span>
+                        </div>
+                        {point.connectorFormat && (
+                          <div>
+                            <span className="text-gray-600 dark:text-gray-400">Format:</span>{' '}
+                            <span className="font-medium text-gray-900 dark:text-gray-100">{point.connectorFormat}</span>
                           </div>
-                        ))}
+                        )}
+                        {point.powerType && (
+                          <div>
+                            <span className="text-gray-600 dark:text-gray-400">Stromart:</span>{' '}
+                            <span className="font-medium text-gray-900 dark:text-gray-100">{point.powerType}</span>
+                          </div>
+                        )}
+                        {point.maxCurrent && point.maxVoltage && (
+                          <div>
+                            <span className="text-gray-600 dark:text-gray-400">Strom/Spannung:</span>{' '}
+                            <span className="font-medium text-gray-900 dark:text-gray-100">{point.maxCurrent}A @ {point.maxVoltage}V</span>
+                          </div>
+                        )}
+                        {point.physicalReference && (
+                          <div className="col-span-2">
+                            <span className="text-gray-600 dark:text-gray-400">Physische Referenz:</span>{' '}
+                            <span className="font-medium text-gray-900 dark:text-gray-100">{point.physicalReference}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
-      )}
+          ) : (
+            <div className="text-center py-12 bg-gray-50 rounded-lg">
+              <Zap className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                Noch keine Ladepunkte vorhanden
+              </h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Legen Sie einen ersten Ladepunkt (EVSE) für diese Station an.<br />
+                Ein Ladepunkt entspricht einem physischen Stecker.
+              </p>
+              <Button onClick={handleAddChargingPoint}>
+                <Plus className="h-4 w-4 mr-2" />
+                Ersten Ladepunkt anlegen
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* ChargingPoint Dialog */}
       <Dialog open={showChargingPointDialog} onOpenChange={setShowChargingPointDialog}>
@@ -825,23 +945,39 @@ export const ChargingStationDetail: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Connector Dialog */}
-      <Dialog open={showConnectorDialog} onOpenChange={setShowConnectorDialog}>
-        <DialogContent>
-          {selectedChargingPoint && (
-            <ConnectorForm
-              chargingPointId={selectedChargingPoint.id}
-              connector={editingConnector}
-              onSubmit={handleSubmitConnector}
-              onCancel={() => {
-                setShowConnectorDialog(false);
-                setEditingConnector(null);
-                setSelectedChargingPoint(null);
-              }}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Delete Confirmation Dialogs */}
+      <ConfirmDialog
+        open={deleteConfirm.open && deleteConfirm.type === 'station'}
+        onOpenChange={(open) => setDeleteConfirm({ ...deleteConfirm, open })}
+        title="Ladestation löschen"
+        message={`Möchten Sie die Ladestation "${deleteConfirm.name}" wirklich löschen? Alle Ladepunkte werden ebenfalls deaktiviert. Diese Aktion kann nicht rückgängig gemacht werden.`}
+        confirmText="Löschen"
+        cancelText="Abbrechen"
+        variant="destructive"
+        onConfirm={handleDeleteStationConfirm}
+      />
+
+      <ConfirmDialog
+        open={deleteConfirm.open && deleteConfirm.type === 'chargingPoint'}
+        onOpenChange={(open) => setDeleteConfirm({ ...deleteConfirm, open })}
+        title="Ladepunkt löschen"
+        message={`Möchten Sie den Ladepunkt "${deleteConfirm.name}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`}
+        confirmText="Löschen"
+        cancelText="Abbrechen"
+        variant="destructive"
+        onConfirm={handleDeleteChargingPointConfirm}
+      />
+
+      <ConfirmDialog
+        open={deleteConfirm.open && deleteConfirm.type === 'group'}
+        onOpenChange={(open) => setDeleteConfirm({ ...deleteConfirm, open })}
+        title="Aus Gruppe entfernen"
+        message={`Möchten Sie diese Ladestation wirklich aus der Gruppe "${deleteConfirm.name}" entfernen?`}
+        confirmText="Entfernen"
+        cancelText="Abbrechen"
+        variant="default"
+        onConfirm={handleRemoveFromGroupConfirm}
+      />
     </div>
   );
 };

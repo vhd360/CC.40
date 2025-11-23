@@ -26,6 +26,8 @@ import {
 import { api, VehicleAssignment } from '../services/api';
 import { Badge } from '../components/ui/badge';
 import { useSignalRContext } from '../contexts/SignalRContext';
+import { useToast } from '../components/ui/toast';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
 export const UserDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -36,6 +38,11 @@ export const UserDashboard: React.FC = () => {
   const [myVehicles, setMyVehicles] = useState<VehicleAssignment[]>([]);
   const [activeSessions, setActiveSessions] = useState<any[]>([]);
   const [stopping, setStopping] = useState<string | null>(null);
+  const [stopConfirm, setStopConfirm] = useState<{ open: boolean; sessionId: string | null }>({
+    open: false,
+    sessionId: null
+  });
+  const { showToast } = useToast();
 
   useEffect(() => {
     loadDashboard();
@@ -114,19 +121,25 @@ export const UserDashboard: React.FC = () => {
     }
   };
 
-  const handleStopCharging = async (sessionId: string) => {
-    if (!window.confirm('Möchten Sie den Ladevorgang wirklich beenden?')) return;
+  const handleStopCharging = (sessionId: string) => {
+    setStopConfirm({ open: true, sessionId });
+  };
+
+  const handleStopConfirm = async () => {
+    if (!stopConfirm.sessionId) return;
 
     try {
-      setStopping(sessionId);
-      await api.stopChargingSession(sessionId);
+      setStopping(stopConfirm.sessionId);
+      await api.stopChargingSession(stopConfirm.sessionId);
       // Reload data
       await Promise.all([loadDashboard(), loadActiveSessions()]);
+      showToast('Ladevorgang erfolgreich beendet', 'success');
     } catch (error: any) {
       console.error('Failed to stop charging:', error);
-      alert(error.message || 'Fehler beim Stoppen des Ladevorgangs');
+      showToast(error.message || 'Fehler beim Stoppen des Ladevorgangs', 'error');
     } finally {
       setStopping(null);
+      setStopConfirm({ open: false, sessionId: null });
     }
   };
 
@@ -545,6 +558,18 @@ export const UserDashboard: React.FC = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Stop Charging Confirmation Dialog */}
+      <ConfirmDialog
+        open={stopConfirm.open}
+        onOpenChange={(open) => setStopConfirm({ ...stopConfirm, open })}
+        title="Ladevorgang beenden"
+        message="Möchten Sie den Ladevorgang wirklich beenden? Diese Aktion kann nicht rückgängig gemacht werden."
+        confirmText="Beenden"
+        cancelText="Abbrechen"
+        variant="destructive"
+        onConfirm={handleStopConfirm}
+      />
     </div>
   );
 };

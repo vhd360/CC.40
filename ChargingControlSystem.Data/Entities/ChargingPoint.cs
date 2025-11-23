@@ -6,7 +6,7 @@ namespace ChargingControlSystem.Data.Entities;
 /// <summary>
 /// Represents a charging point (EVSE - Electric Vehicle Supply Equipment)
 /// One ChargingStation can have multiple ChargingPoints
-/// One ChargingPoint can have multiple ChargingConnectors
+/// One ChargingPoint = One Connector (1:1 Beziehung)
 /// </summary>
 public class ChargingPoint
 {
@@ -46,7 +46,44 @@ public class ChargingPoint
     public int MaxPower { get; set; }
 
     /// <summary>
-    /// Current status of the charging point
+    /// Connector type: Type2, CCS, CHAdeMO, Tesla, etc.
+    /// </summary>
+    [Required]
+    [MaxLength(50)]
+    public string ConnectorType { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Connector format according to OCPI
+    /// </summary>
+    [MaxLength(50)]
+    public string? ConnectorFormat { get; set; } // SOCKET, CABLE, etc.
+
+    /// <summary>
+    /// Power type: AC_1_PHASE, AC_3_PHASE, DC
+    /// </summary>
+    [MaxLength(20)]
+    public string? PowerType { get; set; }
+
+    /// <summary>
+    /// Maximum current in Amperes
+    /// </summary>
+    [Required]
+    public int MaxCurrent { get; set; }
+
+    /// <summary>
+    /// Maximum voltage in Volts
+    /// </summary>
+    [Required]
+    public int MaxVoltage { get; set; }
+
+    /// <summary>
+    /// Physical reference/label on the charging point
+    /// </summary>
+    [MaxLength(50)]
+    public string? PhysicalReference { get; set; }
+
+    /// <summary>
+    /// Current status of the charging point/connector
     /// </summary>
     [Required]
     public ChargingPointStatus Status { get; set; } = ChargingPointStatus.Available;
@@ -98,7 +135,7 @@ public class ChargingPoint
 
     // Navigation properties
     public virtual ChargingStation ChargingStation { get; set; } = null!;
-    public virtual ICollection<ChargingConnector> Connectors { get; set; } = new List<ChargingConnector>();
+    public virtual ICollection<ChargingSession> ChargingSessions { get; set; } = new List<ChargingSession>();
 }
 
 public enum ChargingPointStatus

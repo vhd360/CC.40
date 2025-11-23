@@ -42,6 +42,7 @@ public class OcppMessageHandler : IOcppMessageHandler
             "BootNotification" => await HandleBootNotificationAsync(chargeBoxId, payload.ToObject<BootNotificationRequest>(serializer)!),
             "Heartbeat" => await HandleHeartbeatAsync(chargeBoxId),
             "StatusNotification" => await HandleStatusNotificationAsync(chargeBoxId, payload.ToObject<StatusNotificationRequest>(serializer)!),
+            "FirmwareStatusNotification" => await HandleFirmwareStatusNotificationAsync(chargeBoxId, payload.ToObject<FirmwareStatusNotificationRequest>(serializer)!),
             "Authorize" => await HandleAuthorizeAsync(chargeBoxId, payload.ToObject<AuthorizeRequest>(serializer)!),
             "StartTransaction" => await HandleStartTransactionAsync(chargeBoxId, payload.ToObject<StartTransactionRequest>(serializer)!),
             "StopTransaction" => await HandleStopTransactionAsync(chargeBoxId, payload.ToObject<StopTransactionRequest>(serializer)!),
@@ -56,6 +57,7 @@ public class OcppMessageHandler : IOcppMessageHandler
 
         // Find charging station by ChargeBoxId
         var station = await context.ChargingStations
+            .Include(s => s.ChargingPark)
             .FirstOrDefaultAsync(s => s.ChargeBoxId == chargeBoxId);
 
         if (station == null)
@@ -70,12 +72,29 @@ public class OcppMessageHandler : IOcppMessageHandler
         }
 
         // Update station information
+        var previousStatus = station.Status;
         station.Vendor = request.ChargePointVendor;
         station.Model = request.ChargePointModel;
         station.LastHeartbeat = DateTime.UtcNow;
         station.Status = ChargingStationStatus.Available;
 
         await context.SaveChangesAsync();
+
+        // Notify clients if station was previously unavailable and is now back online
+        // Oder wenn Status sich geändert hat (für Frontend-Synchronisation)
+        if (previousStatus != ChargingStationStatus.Available)
+        {
+            _logger.LogInformation("BootNotification: Station {ChargeBoxId} (ID: {StationId}) changed from {PreviousStatus} to Available, sending notification", 
+                chargeBoxId, station.Id, previousStatus);
+            await NotifyStationStatusChangedAsync(station.ChargingPark.TenantId, station.Id, "Available", "Station is back online");
+        }
+        else
+        {
+            // Auch wenn Status bereits Available ist, sende Benachrichtigung für Frontend-Synchronisation
+            _logger.LogInformation("BootNotification: Station {ChargeBoxId} (ID: {StationId}) is Available, sending notification for sync", 
+                chargeBoxId, station.Id);
+            await NotifyStationStatusChangedAsync(station.ChargingPark.TenantId, station.Id, "Available", "Station online");
+        }
 
         _logger.LogInformation("BootNotification from {ChargeBoxId}: {Vendor} {Model}", 
             chargeBoxId, request.ChargePointVendor, request.ChargePointModel);
@@ -99,6 +118,9 @@ public class OcppMessageHandler : IOcppMessageHandler
         if (station != null)
         {
             var previousStatus = station.Status;
+            var lastHeartbeatBeforeUpdate = station.LastHeartbeat;
+            
+            // Update heartbeat
             station.LastHeartbeat = DateTime.UtcNow;
             
             // If station was unavailable and now sending heartbeat, mark as available
@@ -108,11 +130,46 @@ public class OcppMessageHandler : IOcppMessageHandler
                 await context.SaveChangesAsync();
                 
                 // Notify clients about status change
+                _logger.LogInformation("Station {ChargeBoxId} (ID: {StationId}) changed from Unavailable to Available, sending notification", 
+                    chargeBoxId, station.Id);
                 await NotifyStationStatusChangedAsync(station.ChargingPark.TenantId, station.Id, "Available", "Station is back online");
             }
             else
             {
-                await context.SaveChangesAsync();
+                // Wenn Status bereits Available ist, sende trotzdem Benachrichtigung für Frontend-Synchronisation
+                // Sende alle 30 Sekunden eine Benachrichtigung, um Frontend zu synchronisieren
+                var timeSinceLastHeartbeat = lastHeartbeatBeforeUpdate.HasValue 
+                    ? (DateTime.UtcNow - lastHeartbeatBeforeUpdate.Value).TotalSeconds 
+                    : 999; // Wenn kein vorheriger Heartbeat, sende sofort
+                
+                if (timeSinceLastHeartbeat >= 30)
+                {
+                    if (previousStatus != ChargingStationStatus.Available)
+                    {
+                        station.Status = ChargingStationStatus.Available;
+                    }
+                    await context.SaveChangesAsync();
+                    _logger.LogInformation("Station {ChargeBoxId} (ID: {StationId}) sending periodic status notification (Available) for sync - {TimeSinceLastHeartbeat}s since last heartbeat", 
+                        chargeBoxId, station.Id, timeSinceLastHeartbeat);
+                    await NotifyStationStatusChangedAsync(station.ChargingPark.TenantId, station.Id, "Available", "Station online");
+                }
+                else
+                {
+                    if (previousStatus != ChargingStationStatus.Available)
+                    {
+                        station.Status = ChargingStationStatus.Available;
+                        await context.SaveChangesAsync();
+                        _logger.LogInformation("Station {ChargeBoxId} (ID: {StationId}) status changed to Available, sending notification", 
+                            chargeBoxId, station.Id);
+                        await NotifyStationStatusChangedAsync(station.ChargingPark.TenantId, station.Id, "Available", "Station status updated");
+                    }
+                    else
+                    {
+                        await context.SaveChangesAsync();
+                        _logger.LogDebug("Station {ChargeBoxId} (ID: {StationId}) heartbeat received, status already Available, no notification sent ({TimeSinceLastHeartbeat}s since last heartbeat)", 
+                            chargeBoxId, station.Id, timeSinceLastHeartbeat);
+                    }
+                }
             }
         }
 
@@ -131,7 +188,6 @@ public class OcppMessageHandler : IOcppMessageHandler
         var station = await context.ChargingStations
             .Include(s => s.ChargingPark)
             .Include(s => s.ChargingPoints)
-                .ThenInclude(cp => cp.Connectors)
             .FirstOrDefaultAsync(s => s.ChargeBoxId == chargeBoxId);
 
         if (station != null)
@@ -151,36 +207,35 @@ public class OcppMessageHandler : IOcppMessageHandler
             
             station.Status = newStatus;
 
-            // Update connector status if ConnectorId > 0
+            // Update charging point status if ConnectorId > 0
             if (request.ConnectorId > 0)
             {
                 var chargingPoint = station.ChargingPoints.FirstOrDefault(cp => cp.EvseId == request.ConnectorId);
                 if (chargingPoint != null)
                 {
-                    var connector = chargingPoint.Connectors.FirstOrDefault();
-                    if (connector != null)
+                    var previousStatus = chargingPoint.Status;
+                    
+                    chargingPoint.Status = request.Status switch
                     {
-                        var previousConnectorStatus = connector.Status;
-                        
-                        connector.Status = request.Status switch
-                        {
-                            ChargePointStatus.Available => ConnectorStatus.Available,
-                            ChargePointStatus.Preparing or ChargePointStatus.Charging => ConnectorStatus.Occupied,
-                            ChargePointStatus.Unavailable => ConnectorStatus.Unavailable,
-                            ChargePointStatus.Faulted => ConnectorStatus.Faulted,
-                            ChargePointStatus.Reserved => ConnectorStatus.Reserved,
-                            _ => ConnectorStatus.Unavailable
-                        };
+                        ChargePointStatus.Available => ChargingPointStatus.Available,
+                        ChargePointStatus.Preparing => ChargingPointStatus.Preparing,
+                        ChargePointStatus.Charging => ChargingPointStatus.Charging,
+                        ChargePointStatus.Unavailable => ChargingPointStatus.Unavailable,
+                        ChargePointStatus.Faulted => ChargingPointStatus.Faulted,
+                        ChargePointStatus.Reserved => ChargingPointStatus.Reserved,
+                        ChargePointStatus.Finishing => ChargingPointStatus.Finishing,
+                        _ => ChargingPointStatus.Unavailable
+                    };
 
-                        // Notify about connector status change if it changed
-                        if (previousConnectorStatus != connector.Status)
-                        {
-                            await NotifyConnectorStatusChangedAsync(
-                                station.ChargingPark.TenantId, 
-                                connector.Id, 
-                                connector.Status.ToString(), 
-                                request.ErrorCode);
-                        }
+                    // Notify about charging point status change if it changed
+                    if (previousStatus != chargingPoint.Status)
+                    {
+                        chargingPoint.LastStatusChange = DateTime.UtcNow;
+                        await NotifyConnectorStatusChangedAsync(
+                            station.ChargingPark.TenantId, 
+                            chargingPoint.Id, 
+                            chargingPoint.Status.ToString(), 
+                            request.ErrorCode);
                     }
                 }
             }
@@ -202,6 +257,34 @@ public class OcppMessageHandler : IOcppMessageHandler
             chargeBoxId, request.ConnectorId, request.Status);
 
         return new StatusNotificationResponse();
+    }
+
+    private async Task<FirmwareStatusNotificationResponse> HandleFirmwareStatusNotificationAsync(string chargeBoxId, FirmwareStatusNotificationRequest request)
+    {
+        using var context = await _contextFactory.CreateDbContextAsync();
+
+        var station = await context.ChargingStations
+            .Include(s => s.ChargingPark)
+            .FirstOrDefaultAsync(s => s.ChargeBoxId == chargeBoxId);
+
+        if (station != null)
+        {
+            // Log firmware status update
+            _logger.LogInformation("FirmwareStatusNotification from {ChargeBoxId}: Status={Status}, Info={Info}", 
+                chargeBoxId, request.Status, request.Info ?? "N/A");
+
+            // Optionally store firmware status in station metadata or log it
+            // For now, we just log it. In a production system, you might want to:
+            // - Store firmware version in station entity
+            // - Track firmware update history
+            // - Send notifications to admins about failed updates
+        }
+        else
+        {
+            _logger.LogWarning("Received FirmwareStatusNotification from unknown ChargeBox: {ChargeBoxId}", chargeBoxId);
+        }
+
+        return new FirmwareStatusNotificationResponse();
     }
 
     private async Task<AuthorizeResponse> HandleAuthorizeAsync(string chargeBoxId, AuthorizeRequest request)
@@ -239,10 +322,9 @@ public class OcppMessageHandler : IOcppMessageHandler
     {
         using var context = await _contextFactory.CreateDbContextAsync();
 
-        // Find station with charging points and connectors
+        // Find station with charging points
         var station = await context.ChargingStations
             .Include(s => s.ChargingPoints)
-                .ThenInclude(cp => cp.Connectors)
             .FirstOrDefaultAsync(s => s.ChargeBoxId == chargeBoxId);
 
         if (station == null)
@@ -296,14 +378,11 @@ public class OcppMessageHandler : IOcppMessageHandler
             };
         }
 
-        // Find connector (either Available or Occupied - might be occupied from Web-UI start)
-        var connector = chargingPoint.Connectors.FirstOrDefault(c => 
-            c.Status == ConnectorStatus.Available || c.Status == ConnectorStatus.Occupied);
-        
-        if (connector == null)
+        // Check if charging point is available (ChargingPoint is now the connector)
+        if (chargingPoint.Status != ChargingPointStatus.Available && chargingPoint.Status != ChargingPointStatus.Occupied)
         {
-            _logger.LogWarning("No connector found on ChargingPoint {ChargingPointId} (EvseId: {EvseId})", 
-                chargingPoint.Id, chargingPoint.EvseId);
+            _logger.LogWarning("ChargingPoint {ChargingPointId} (EvseId: {EvseId}) is not available (Status: {Status})", 
+                chargingPoint.Id, chargingPoint.EvseId, chargingPoint.Status);
             return new StartTransactionResponse
             {
                 IdTagInfo = new IdTagInfo { Status = AuthorizationStatus.Invalid },
@@ -327,10 +406,10 @@ public class OcppMessageHandler : IOcppMessageHandler
         var random = new Random();
         var ocppTransactionId = random.Next(1, int.MaxValue);
 
-        // Check if there's already a session for this connector (from Web-UI RemoteStart)
+        // Check if there's already a session for this charging point (from Web-UI RemoteStart)
         var existingSession = await context.ChargingSessions
             .FirstOrDefaultAsync(s => 
-                s.ChargingConnectorId == connector.Id && 
+                s.ChargingPointId == chargingPoint.Id && 
                 s.Status == ChargingSessionStatus.Charging &&
                 s.AuthorizationMethodId == authMethod.Id &&
                 s.OcppTransactionId == null);
@@ -354,7 +433,7 @@ public class OcppMessageHandler : IOcppMessageHandler
             {
                 Id = Guid.NewGuid(),
                 TenantId = park.TenantId,
-                ChargingConnectorId = connector.Id,
+                ChargingPointId = chargingPoint.Id,
                 UserId = authMethod.UserId,
                 SessionId = Guid.NewGuid().ToString(),
                 OcppTransactionId = ocppTransactionId,
@@ -369,8 +448,9 @@ public class OcppMessageHandler : IOcppMessageHandler
                 ocppTransactionId, authMethod.UserId, station.Id);
         }
 
-        // Update connector status
-        connector.Status = ConnectorStatus.Occupied;
+        // Update charging point status
+        chargingPoint.Status = ChargingPointStatus.Occupied;
+        chargingPoint.LastStatusChange = DateTime.UtcNow;
         
         await context.SaveChangesAsync();
 
@@ -387,9 +467,8 @@ public class OcppMessageHandler : IOcppMessageHandler
 
         // Find session by OCPP transaction ID
         var session = await context.ChargingSessions
-            .Include(s => s.ChargingConnector)
-                .ThenInclude(c => c.ChargingPoint)
-                    .ThenInclude(cp => cp.ChargingStation)
+            .Include(s => s.ChargingPoint)
+                .ThenInclude(cp => cp.ChargingStation)
             .FirstOrDefaultAsync(s => s.OcppTransactionId == request.TransactionId);
 
         if (session == null)
@@ -709,6 +788,7 @@ public class OcppMessageHandler : IOcppMessageHandler
     {
         if (_serviceProviderFactory == null)
         {
+            _logger.LogWarning("ServiceProviderFactory not available, cannot send notification for station {StationId}", stationId);
             return;
         }
 
@@ -720,12 +800,14 @@ public class OcppMessageHandler : IOcppMessageHandler
             var notificationServiceType = Type.GetType("ChargingControlSystem.Api.Services.INotificationService, ChargingControlSystem.Api");
             if (notificationServiceType == null)
             {
+                _logger.LogWarning("INotificationService type not found, cannot send notification for station {StationId}", stationId);
                 return;
             }
 
             var notificationService = scope.ServiceProvider.GetService(notificationServiceType);
             if (notificationService == null)
             {
+                _logger.LogWarning("INotificationService not found in service provider, cannot send notification for station {StationId}", stationId);
                 return;
             }
 
@@ -733,11 +815,18 @@ public class OcppMessageHandler : IOcppMessageHandler
             var method = notificationServiceType.GetMethod("NotifyStationStatusChangedAsync");
             if (method != null)
             {
+                _logger.LogInformation("Sending SignalR notification: TenantId={TenantId}, StationId={StationId}, Status={Status}", 
+                    tenantId, stationId, status);
                 var task = method.Invoke(notificationService, new object[] { tenantId, stationId, status, message });
                 if (task is Task notifyTask)
                 {
                     await notifyTask;
+                    _logger.LogInformation("Successfully sent SignalR notification for station {StationId}, Status={Status}", stationId, status);
                 }
+            }
+            else
+            {
+                _logger.LogWarning("NotifyStationStatusChangedAsync method not found, cannot send notification for station {StationId}", stationId);
             }
         }
         catch (Exception ex)

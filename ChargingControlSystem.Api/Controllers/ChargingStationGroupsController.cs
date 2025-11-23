@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using ChargingControlSystem.Data;
 using ChargingControlSystem.Data.Entities;
@@ -7,6 +8,7 @@ namespace ChargingControlSystem.Api.Controllers;
 
 [ApiController]
 [Route("api/charging-station-groups")]
+[Authorize]
 public class ChargingStationGroupsController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
@@ -123,11 +125,18 @@ public class ChargingStationGroupsController : ControllerBase
     [HttpPost("{id}/stations/{stationId}")]
     public async Task<IActionResult> AddStation(Guid id, Guid stationId)
     {
-        var group = await _context.ChargingStationGroups.FindAsync(id);
+        var tenantId = HttpContext.Items["TenantId"] as Guid?;
+        if (tenantId == null)
+            return BadRequest("Tenant not found");
+
+        var group = await _context.ChargingStationGroups
+            .FirstOrDefaultAsync(g => g.Id == id && g.TenantId == tenantId.Value);
         if (group == null)
             return NotFound("Group not found");
 
-        var station = await _context.ChargingStations.FindAsync(stationId);
+        var station = await _context.ChargingStations
+            .Include(s => s.ChargingPark)
+            .FirstOrDefaultAsync(s => s.Id == stationId && s.ChargingPark.TenantId == tenantId.Value);
         if (station == null)
             return NotFound("Station not found");
 

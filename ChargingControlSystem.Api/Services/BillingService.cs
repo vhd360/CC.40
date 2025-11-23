@@ -25,9 +25,8 @@ public class BillingService : IBillingService
         {
             // Reload session with all navigation properties from THIS context
             var fullSession = await context.ChargingSessions
-                .Include(s => s.ChargingConnector)
-                    .ThenInclude(c => c.ChargingPoint)
-                        .ThenInclude(cp => cp.ChargingStation)
+                .Include(s => s.ChargingPoint)
+                    .ThenInclude(cp => cp.ChargingStation)
                 .Include(s => s.Vehicle)
                 .Include(s => s.User)
                 .FirstOrDefaultAsync(s => s.Id == session.Id);
@@ -52,7 +51,7 @@ public class BillingService : IBillingService
             }
 
             // Erstelle Transaktion mit vollständigen Daten
-            var stationName = fullSession.ChargingConnector?.ChargingPoint?.ChargingStation?.Name ?? "Station";
+            var stationName = fullSession.ChargingPoint?.ChargingStation?.Name ?? "Station";
             var vehicleInfo = fullSession.Vehicle != null 
                 ? $" ({fullSession.Vehicle.Make} {fullSession.Vehicle.Model} - {fullSession.Vehicle.LicensePlate})" 
                 : "";
@@ -152,9 +151,8 @@ public class BillingService : IBillingService
 
         return await context.BillingTransactions
             .Include(t => t.ChargingSession)
-                .ThenInclude(s => s!.ChargingConnector)
-                    .ThenInclude(c => c.ChargingPoint)
-                        .ThenInclude(cp => cp.ChargingStation)
+                .ThenInclude(s => s!.ChargingPoint)
+                    .ThenInclude(cp => cp.ChargingStation)
             .Where(t => t.ChargingSession!.UserId == userId)
             .OrderByDescending(t => t.CreatedAt)
             .ToListAsync();
@@ -173,9 +171,8 @@ public class BillingService : IBillingService
             .Include(t => t.ChargingSession)
                 .ThenInclude(s => s!.User)
             .Include(t => t.ChargingSession)
-                .ThenInclude(s => s!.ChargingConnector)
-                    .ThenInclude(c => c.ChargingPoint)
-                        .ThenInclude(cp => cp.ChargingStation)
+                .ThenInclude(s => s!.ChargingPoint)
+                    .ThenInclude(cp => cp.ChargingStation)
             .Where(t => t.BillingAccount.TenantId == tenantId);
 
         if (fromDate.HasValue)

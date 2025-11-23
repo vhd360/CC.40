@@ -105,7 +105,7 @@
             <summary>
             Ladevorgang starten
             </summary>
-            <param name="connectorId">ID des Konnektors</param>
+            <param name="chargingPointId">ID des Ladepunkts</param>
             <param name="vehicleId">ID des Fahrzeugs (optional)</param>
             <returns>Neue Lade-Session</returns>
             <remarks>
@@ -192,9 +192,39 @@
             Verfügbare Connectoren für eine Station abrufen
             </summary>
         </member>
-        <member name="M:ChargingControlSystem.Api.Controllers.ChargingController.ResetConnectorStatus(System.Guid)">
+        <member name="M:ChargingControlSystem.Api.Controllers.ChargingController.ResetChargingPointStatus(System.Guid)">
             <summary>
-            Connector-Status zurücksetzen (Admin)
+            Ladepunkt-Status zurücksetzen (Admin)
+            </summary>
+        </member>
+        <member name="T:ChargingControlSystem.Api.Controllers.ChargingPointsController">
+            <summary>
+            Ladepunkte-Verwaltung (EVSE)
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.ChargingPointsController.GetByStation(System.Guid)">
+            <summary>
+            Alle Ladepunkte einer Station abrufen
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.ChargingPointsController.GetById(System.Guid)">
+            <summary>
+            Einzelnen Ladepunkt abrufen
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.ChargingPointsController.Create(ChargingControlSystem.Api.Controllers.CreateChargingPointDto)">
+            <summary>
+            Neuen Ladepunkt erstellen
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.ChargingPointsController.Update(System.Guid,ChargingControlSystem.Api.Controllers.UpdateChargingPointDto)">
+            <summary>
+            Ladepunkt aktualisieren
+            </summary>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.ChargingPointsController.Delete(System.Guid)">
+            <summary>
+            Ladepunkt löschen
             </summary>
         </member>
         <member name="T:ChargingControlSystem.Api.Controllers.ChargingStationsController">

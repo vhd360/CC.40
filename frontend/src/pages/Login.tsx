@@ -42,8 +42,11 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         return;
       }
   
-      // Speichere Token und User-Daten
+      // Speichere Token, RefreshToken und User-Daten
       localStorage.setItem('token', data.token);
+      if (data.refreshToken) {
+        localStorage.setItem('refreshToken', data.refreshToken);
+      }
       localStorage.setItem('user', JSON.stringify(data.user));
       
       onLogin();
@@ -215,5 +218,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         </div>
       </div>
     </div>
+  );
+};
+
   );
 };

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { Badge } from '../components/ui/badge';
 import {
   Table,
   TableBody,
@@ -11,20 +10,16 @@ import {
   TableHeader,
   TableRow
 } from '../components/ui/table';
-import { Users, Zap, Car, CreditCard, RefreshCw, CheckCircle, XCircle, AlertTriangle, Building2, Euro, Leaf, TrendingUp } from 'lucide-react';
+import { Users, Zap, CreditCard, RefreshCw, Building2, Euro, Leaf, TrendingUp } from 'lucide-react';
 import { api, DashboardStats, ChargingSession } from '../services/api';
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [recentSessions, setRecentSessions] = useState<ChargingSession[]>([]);
   const [subTenantCount, setSubTenantCount] = useState<number>(0);
-  const [loading, setLoading] = useState(true);
 
   const loadData = async () => {
     try {
-      setLoading(true);
-      
       // Load sub-tenants count
       const token = localStorage.getItem('token');
       const userStr = localStorage.getItem('user');
@@ -57,7 +52,6 @@ export const Dashboard: React.FC = () => {
       ]);
 
       setStats(statsData);
-      setRecentSessions(sessionsData.slice(0, 5)); // Show only last 5 sessions
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
       // Fallback to mock data
@@ -68,40 +62,6 @@ export const Dashboard: React.FC = () => {
         activeStations: 2,
         activeVehicles: 2
       });
-      setRecentSessions([
-        {
-          id: '1',
-          user: 'Max Mustermann',
-          vehicle: 'BMW i3',
-          station: 'Parkplatz Nord',
-          duration: '45 min',
-          cost: '€12.50',
-          status: 'completed',
-          startedAt: '2024-01-23T12:00:00Z'
-        },
-        {
-          id: '2',
-          user: 'Anna Schmidt',
-          vehicle: 'Tesla Model 3',
-          station: 'Hauptgebäude',
-          duration: '32 min',
-          cost: '€8.90',
-          status: 'completed',
-          startedAt: '2024-01-23T11:30:00Z'
-        },
-        {
-          id: '3',
-          user: 'Peter Müller',
-          vehicle: 'VW ID.4',
-          station: 'Parkhaus Süd',
-          duration: '67 min',
-          cost: '€18.75',
-          status: 'completed',
-          startedAt: '2024-01-23T10:15:00Z'
-        }
-      ]);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -142,13 +102,6 @@ export const Dashboard: React.FC = () => {
       color: 'text-purple-600',
       bgColor: 'bg-purple-100'
     },
-  ] : [];
-
-  const systemStatus = stats ? [
-    { name: 'API Server', status: 'online', color: 'bg-green-500' },
-    { name: 'Datenbank', status: 'verbunden', color: 'bg-green-500' },
-    { name: 'Ladestationen', status: `${stats.activeStations}/${stats.totalStations} aktiv`, color: stats.activeStations === stats.totalStations ? 'bg-green-500' : 'bg-yellow-500' },
-    { name: 'Fahrzeuge', status: `${stats.activeVehicles}/${stats.totalVehicles} aktiv`, color: 'bg-green-500' },
   ] : [];
 
   const refreshData = () => {

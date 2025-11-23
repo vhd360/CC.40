@@ -147,7 +147,8 @@ public class UserPortalController : ControllerBase
                         m.ChargingStationGroup.Name
                     })
                     .ToList(),
-                s.LastHeartbeat
+                s.LastHeartbeat,
+                s.ChargeBoxId
             })
             .ToListAsync();
 
@@ -226,10 +227,9 @@ public class UserPortalController : ControllerBase
 
         var query = _context.ChargingSessions
             .Include(s => s.Vehicle)
-            .Include(s => s.ChargingConnector)
-                .ThenInclude(c => c.ChargingPoint)
-                    .ThenInclude(cp => cp.ChargingStation)
-                        .ThenInclude(st => st.ChargingPark)
+            .Include(s => s.ChargingPoint)
+                .ThenInclude(cp => cp.ChargingStation)
+                    .ThenInclude(st => st.ChargingPark)
             .Include(s => s.AuthorizationMethod)
             .Where(s => s.UserId == userId)
             .OrderByDescending(s => s.StartedAt);
@@ -255,21 +255,22 @@ public class UserPortalController : ControllerBase
                 } : null,
                 Station = new
                 {
-                    s.ChargingConnector.ChargingPoint.ChargingStation.Id,
-                    s.ChargingConnector.ChargingPoint.ChargingStation.Name,
-                    s.ChargingConnector.ChargingPoint.ChargingStation.StationId,
+                    s.ChargingPoint.ChargingStation.Id,
+                    s.ChargingPoint.ChargingStation.Name,
+                    s.ChargingPoint.ChargingStation.StationId,
                     ChargingPark = new
                     {
-                        s.ChargingConnector.ChargingPoint.ChargingStation.ChargingPark.Name,
-                        s.ChargingConnector.ChargingPoint.ChargingStation.ChargingPark.Address,
-                        s.ChargingConnector.ChargingPoint.ChargingStation.ChargingPark.City
+                        s.ChargingPoint.ChargingStation.ChargingPark.Name,
+                        s.ChargingPoint.ChargingStation.ChargingPark.Address,
+                        s.ChargingPoint.ChargingStation.ChargingPark.City
                     }
                 },
-                Connector = new
+                ChargingPoint = new
                 {
-                    s.ChargingConnector.Id,
-                    s.ChargingConnector.ConnectorId,
-                    Type = s.ChargingConnector.ConnectorType
+                    s.ChargingPoint.Id,
+                    s.ChargingPoint.EvseId,
+                    s.ChargingPoint.Name,
+                    Type = s.ChargingPoint.ConnectorType
                 },
                 AuthorizationMethod = s.AuthorizationMethod != null ? new
                 {
@@ -312,15 +313,14 @@ public class UserPortalController : ControllerBase
 
         // Total costs per charging park (lifetime)
         var costsByPark = await _context.ChargingSessions
-            .Include(s => s.ChargingConnector)
-                .ThenInclude(c => c.ChargingPoint)
-                    .ThenInclude(cp => cp.ChargingStation)
-                        .ThenInclude(st => st.ChargingPark)
+            .Include(s => s.ChargingPoint)
+                .ThenInclude(cp => cp.ChargingStation)
+                    .ThenInclude(st => st.ChargingPark)
             .Where(s => s.UserId == userId)
             .GroupBy(s => new
             {
-                ParkId = s.ChargingConnector.ChargingPoint.ChargingStation.ChargingPark.Id,
-                ParkName = s.ChargingConnector.ChargingPoint.ChargingStation.ChargingPark.Name
+                ParkId = s.ChargingPoint.ChargingStation.ChargingPark.Id,
+                ParkName = s.ChargingPoint.ChargingStation.ChargingPark.Name
             })
             .Select(g => new
             {
@@ -352,9 +352,8 @@ public class UserPortalController : ControllerBase
 
         var transactions = await _context.BillingTransactions
             .Include(t => t.ChargingSession)
-                .ThenInclude(s => s!.ChargingConnector)
-                    .ThenInclude(c => c.ChargingPoint)
-                        .ThenInclude(cp => cp.ChargingStation)
+                .ThenInclude(s => s!.ChargingPoint)
+                    .ThenInclude(cp => cp.ChargingStation)
             .Where(t => t.ChargingSession!.UserId == userId)
             .OrderByDescending(t => t.CreatedAt)
             .Select(t => new
@@ -372,8 +371,8 @@ public class UserPortalController : ControllerBase
                     t.ChargingSession.EnergyDelivered,
                     t.ChargingSession.StartedAt,
                     t.ChargingSession.EndedAt,
-                    Station = t.ChargingSession.ChargingConnector != null
-                        ? t.ChargingSession.ChargingConnector.ChargingPoint.ChargingStation.Name
+                    Station = t.ChargingSession.ChargingPoint != null
+                        ? t.ChargingSession.ChargingPoint.ChargingStation.Name
                         : "Unknown"
                 } : null
             })
@@ -401,10 +400,9 @@ public class UserPortalController : ControllerBase
         // Load session with all related data
         var session = await _context.ChargingSessions
             .Include(s => s.Vehicle)
-            .Include(s => s.ChargingConnector)
-                .ThenInclude(c => c.ChargingPoint)
-                    .ThenInclude(cp => cp.ChargingStation)
-                        .ThenInclude(st => st.ChargingPark)
+            .Include(s => s.ChargingPoint)
+                .ThenInclude(cp => cp.ChargingStation)
+                    .ThenInclude(st => st.ChargingPark)
             .Include(s => s.AuthorizationMethod)
             .FirstOrDefaultAsync(s => s.Id == id);
 
@@ -430,7 +428,7 @@ public class UserPortalController : ControllerBase
             {
                 costCalculation = await _tariffService.CalculateCostAsync(
                     session.UserId.Value,
-                    session.ChargingConnector.ChargingPoint.ChargingStationId,
+                    session.ChargingPoint.ChargingStationId,
                     session.StartedAt,
                     session.EndedAt.Value,
                     session.EnergyDelivered
@@ -486,24 +484,25 @@ public class UserPortalController : ControllerBase
             // Station information
             Station = new
             {
-                session.ChargingConnector.ChargingPoint.ChargingStation.Id,
-                session.ChargingConnector.ChargingPoint.ChargingStation.Name,
-                session.ChargingConnector.ChargingPoint.ChargingStation.StationId,
+                session.ChargingPoint.ChargingStation.Id,
+                session.ChargingPoint.ChargingStation.Name,
+                session.ChargingPoint.ChargingStation.StationId,
                 ChargingPark = new
                 {
-                    session.ChargingConnector.ChargingPoint.ChargingStation.ChargingPark.Name,
-                    session.ChargingConnector.ChargingPoint.ChargingStation.ChargingPark.Address,
-                    session.ChargingConnector.ChargingPoint.ChargingStation.ChargingPark.City,
-                    session.ChargingConnector.ChargingPoint.ChargingStation.ChargingPark.PostalCode
+                    session.ChargingPoint.ChargingStation.ChargingPark.Name,
+                    session.ChargingPoint.ChargingStation.ChargingPark.Address,
+                    session.ChargingPoint.ChargingStation.ChargingPark.City,
+                    session.ChargingPoint.ChargingStation.ChargingPark.PostalCode
                 }
             },
             
-            // Connector information
-            Connector = new
+            // ChargingPoint information
+            ChargingPoint = new
             {
-                session.ChargingConnector.Id,
-                session.ChargingConnector.ConnectorId,
-                Type = session.ChargingConnector.ConnectorType
+                session.ChargingPoint.Id,
+                session.ChargingPoint.EvseId,
+                session.ChargingPoint.Name,
+                Type = session.ChargingPoint.ConnectorType
             },
             
             // Vehicle information

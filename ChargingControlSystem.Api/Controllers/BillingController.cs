@@ -67,7 +67,7 @@ public class BillingController : ControllerBase
                 User = t.ChargingSession.User != null 
                     ? $"{t.ChargingSession.User.FirstName} {t.ChargingSession.User.LastName}"
                     : "Adhoc",
-                Station = t.ChargingSession.ChargingConnector?.ChargingPoint?.ChargingStation?.Name ?? "Unknown"
+                Station = t.ChargingSession.ChargingPoint?.ChargingStation?.Name ?? "Unknown"
             } : null
         });
 
@@ -85,9 +85,8 @@ public class BillingController : ControllerBase
             .Include(t => t.ChargingSession)
                 .ThenInclude(s => s!.User)
             .Include(t => t.ChargingSession)
-                .ThenInclude(s => s!.ChargingConnector)
-                    .ThenInclude(c => c.ChargingPoint)
-                        .ThenInclude(cp => cp.ChargingStation)
+                .ThenInclude(s => s!.ChargingPoint)
+                    .ThenInclude(cp => cp.ChargingStation)
             .FirstOrDefaultAsync(t => t.Id == id);
 
         if (transaction == null)

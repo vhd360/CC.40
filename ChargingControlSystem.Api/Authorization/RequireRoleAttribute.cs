@@ -16,6 +16,13 @@ public class RequireRoleAttribute : Attribute, IAuthorizationFilter
 
     public void OnAuthorization(AuthorizationFilterContext context)
     {
+        // First check if user is authenticated
+        if (context.HttpContext.User?.Identity?.IsAuthenticated != true)
+        {
+            context.Result = new UnauthorizedResult();
+            return;
+        }
+
         // Try to find the Role claim - check both standard and custom claim types
         var roleClaim = context.HttpContext.User?.FindFirst("Role")?.Value 
                      ?? context.HttpContext.User?.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
@@ -35,6 +42,13 @@ public class RequireRoleAttribute : Attribute, IAuthorizationFilter
         if (!_allowedRoles.Contains(userRole))
         {
             context.Result = new ForbidResult();
+            return;
+        }
+    }
+}
+
+
+
             return;
         }
     }
