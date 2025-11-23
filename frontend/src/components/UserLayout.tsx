@@ -56,7 +56,7 @@ export const UserLayout: React.FC<UserLayoutProps> = ({ onLogout }) => {
   const isActive = (path: string) => location.pathname === path;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 overflow-x-hidden">
       {/* Mobile sidebar */}
       {sidebarOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
@@ -120,29 +120,35 @@ export const UserLayout: React.FC<UserLayoutProps> = ({ onLogout }) => {
       )}
 
       {/* Desktop sidebar */}
-      <div className={`hidden lg:fixed lg:inset-y-0 lg:flex lg:flex-col transition-all duration-300 ${
+      <div className={`hidden lg:fixed lg:inset-y-0 lg:flex lg:flex-col transition-all duration-300 overflow-hidden ${
         sidebarCollapsed ? 'lg:w-16' : 'lg:w-64'
       }`}>
-        <div className="flex flex-col flex-grow bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800">
-          <div className={`flex h-16 items-center border-b dark:border-gray-800 ${
-            sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-4'
-          }`}>
-            {!sidebarCollapsed && (
-              <h1 className="text-xl font-bold text-primary">CUBOS.Charge</h1>
+        <div className="flex flex-col flex-grow bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 overflow-hidden">
+          <div className="border-b dark:border-gray-800 p-4">
+            {!sidebarCollapsed ? (
+              <div className="flex items-center justify-between">
+                <h1 className="text-xl font-bold text-primary truncate flex-1">CUBOS.Charge</h1>
+                <button
+                  onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 flex-shrink-0 ml-2"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center space-y-3">
+                <Zap className="h-8 w-8" style={{ color: 'var(--color-primary)' }} />
+                <button
+                  onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+              </div>
             )}
-            <button
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            >
-              {sidebarCollapsed ? (
-                <ChevronRight className="h-5 w-5" />
-              ) : (
-                <ChevronLeft className="h-5 w-5" />
-              )}
-            </button>
           </div>
-          <div className="flex-1 flex flex-col overflow-y-auto">
-            <nav className="flex-1 space-y-1 px-2 py-4">
+          <div className="flex-1 flex flex-col overflow-y-auto overflow-x-hidden">
+            <nav className="flex-1 space-y-1 px-2 py-4 overflow-hidden">
               {[...navigation, ...debugNavigation].map((item) => (
                 <button
                   key={item.name}
@@ -161,7 +167,7 @@ export const UserLayout: React.FC<UserLayoutProps> = ({ onLogout }) => {
                   
                   {/* Tooltip beim Hover im eingeklappten Zustand */}
                   {sidebarCollapsed && (
-                    <div className="absolute left-full ml-2 px-3 py-2 bg-gray-900 dark:bg-gray-800 text-white text-sm rounded-md opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity shadow-lg">
+                    <div className="fixed left-20 px-3 py-2 bg-gray-900 dark:bg-gray-800 text-white text-sm rounded-md opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[60] transition-opacity shadow-lg">
                       {item.name}
                       <div className="absolute left-0 top-1/2 -translate-x-1 -translate-y-1/2 w-2 h-2 bg-gray-900 dark:bg-gray-800 rotate-45"></div>
                     </div>
@@ -221,7 +227,7 @@ export const UserLayout: React.FC<UserLayoutProps> = ({ onLogout }) => {
       </div>
 
       {/* Main content */}
-      <div className={`flex flex-col flex-1 transition-all duration-300 ${
+      <div className={`flex flex-col flex-1 transition-all duration-300 overflow-x-hidden ${
         sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-64'
       }`}>
         {/* Mobile header */}

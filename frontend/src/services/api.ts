@@ -113,7 +113,7 @@ const fetchWithAuth = async (url: string, options: RequestInit = {}): Promise<Re
     headers = {
       ...headers,
       'Authorization': `Bearer ${token}`
-    };
+  };
   }
   
   // Merge with provided headers (allow override of Content-Type if needed)

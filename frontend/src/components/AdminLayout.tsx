@@ -98,7 +98,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ onLogout }) => {
   }, [theme]);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 overflow-x-hidden">
       {/* Mobile sidebar */}
       <div className={`fixed inset-0 z-50 lg:hidden ${sidebarOpen ? 'block' : 'hidden'}`}>
         <div className="fixed inset-0 bg-black bg-opacity-25" onClick={() => setSidebarOpen(false)} />
@@ -200,50 +200,55 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ onLogout }) => {
         </div>
       </header>
 
-      <div className="flex min-h-screen lg:min-h-screen">
+      <div className="flex min-h-screen lg:min-h-screen overflow-x-hidden">
         {/* Desktop sidebar */}
-        <aside className={`hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 transition-all duration-300 ${
+        <aside className={`hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 transition-all duration-300 overflow-hidden ${
           sidebarCollapsed ? 'lg:w-16' : 'lg:w-64'
         }`}>
-          <div className="flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800">
+          <div className="flex flex-col h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 overflow-hidden">
             {/* Logo und Toggle */}
-            <div className={`flex items-center border-b dark:border-gray-800 p-4 ${
-              sidebarCollapsed ? 'justify-center' : 'justify-between'
-            }`}>
-              {!sidebarCollapsed && (
-                <div className="flex items-center space-x-2">
+            <div className="border-b dark:border-gray-800 p-4">
+              {!sidebarCollapsed ? (
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2 min-w-0 flex-1">
+                    {logoUrl ? (
+                      <img src={`http://localhost:5126${logoUrl}`} alt={`${tenantName} Logo`} className="h-7 w-auto object-contain flex-shrink-0" />
+                    ) : (
+                      <Zap className="h-7 w-7 flex-shrink-0" style={{ color: 'var(--color-primary)' }} />
+                    )}
+                    <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">{tenantName}</h1>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                    className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 flex-shrink-0 ml-2"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center space-y-3">
                   {logoUrl ? (
-                    <img src={`http://localhost:5126${logoUrl}`} alt={`${tenantName} Logo`} className="h-7 w-auto object-contain" />
+                    <img src={`http://localhost:5126${logoUrl}`} alt={`${tenantName} Logo`} className="h-8 w-8 object-contain" />
                   ) : (
-                    <Zap className="h-7 w-7" style={{ color: 'var(--color-primary)' }} />
+                    <Zap className="h-8 w-8" style={{ color: 'var(--color-primary)' }} />
                   )}
-                  <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">{tenantName}</h1>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                    className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
                 </div>
               )}
-              {sidebarCollapsed && (
-                logoUrl ? (
-                  <img src={`http://localhost:5126${logoUrl}`} alt={`${tenantName} Logo`} className="h-7 w-auto object-contain" />
-                ) : (
-                  <Zap className="h-7 w-7" style={{ color: 'var(--color-primary)' }} />
-                )
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-              >
-                {sidebarCollapsed ? (
-                  <ChevronRight className="h-4 w-4" />
-                ) : (
-                  <ChevronLeft className="h-4 w-4" />
-                )}
-              </Button>
             </div>
 
             {/* Navigation */}
-            <div className="flex-1 overflow-y-auto px-2 py-4">
-              <nav className="space-y-1">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-4">
+              <nav className="space-y-1 overflow-hidden">
                 {navigation.map((item) => (
                   <Link
                     key={item.name}
@@ -260,7 +265,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ onLogout }) => {
                     
                     {/* Tooltip */}
                     {sidebarCollapsed && (
-                      <div className="absolute left-full ml-2 px-3 py-2 bg-gray-900 dark:bg-gray-800 text-white text-sm rounded-md opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity shadow-lg">
+                      <div className="fixed left-20 px-3 py-2 bg-gray-900 dark:bg-gray-800 text-white text-sm rounded-md opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-[60] transition-opacity shadow-lg">
                         {item.name}
                         <div className="absolute left-0 top-1/2 -translate-x-1 -translate-y-1/2 w-2 h-2 bg-gray-900 dark:bg-gray-800 rotate-45"></div>
                       </div>
@@ -313,11 +318,11 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ onLogout }) => {
         </aside>
 
         {/* Main content */}
-        <main className={`flex-1 w-full transition-all duration-300 lg:min-h-screen ${
+        <main className={`flex-1 transition-all duration-300 lg:min-h-screen overflow-x-hidden ${
           sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'
         }`}>
-          <div className="py-6">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="py-6 w-full">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full">
               <Outlet />
             </div>
           </div>

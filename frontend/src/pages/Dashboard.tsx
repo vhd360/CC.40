@@ -27,10 +27,10 @@ export const Dashboard: React.FC = () => {
       if (userStr) {
         try {
           const tenants = await api.getTenants();
-          const user = JSON.parse(userStr);
-          // Filter out own tenant
-          const filteredTenants = tenants.filter((tenant: any) => tenant.id !== user.tenantId);
-          subTenantsCount = filteredTenants.length;
+            const user = JSON.parse(userStr);
+            // Filter out own tenant
+            const filteredTenants = tenants.filter((tenant: any) => tenant.id !== user.tenantId);
+            subTenantsCount = filteredTenants.length;
         } catch (err) {
           console.error('Failed to load sub-tenants:', err);
         }
