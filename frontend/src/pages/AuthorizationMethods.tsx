@@ -317,8 +317,8 @@ export const AuthorizationMethods: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Identifikationsmethoden</h1>
-          <p className="text-gray-600 mt-1">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Identifikationsmethoden</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">
             Verwalten Sie RFID-Karten, Autocharge, Mobile Apps und weitere Autorisierungsmethoden
           </p>
         </div>
@@ -331,7 +331,7 @@ export const AuthorizationMethods: React.FC = () => {
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-          <span className="ml-2 text-gray-600">Lade Identifikationsmethoden...</span>
+          <span className="ml-2 text-gray-600 dark:text-gray-400">Lade Identifikationsmethoden...</span>
         </div>
       ) : methods.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -339,7 +339,7 @@ export const AuthorizationMethods: React.FC = () => {
             const typeInfo = methodTypeMap[method.type] || { 
               label: method.type, 
               icon: Key, 
-              color: 'text-gray-600' 
+              color: 'text-gray-600 dark:text-gray-400' 
             };
             const Icon = typeInfo.icon;
 
@@ -361,12 +361,12 @@ export const AuthorizationMethods: React.FC = () => {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div>
-                    <span className="text-xs text-gray-600">Typ</span>
+                    <span className="text-xs text-gray-600 dark:text-gray-400">Typ</span>
                     <div className="text-sm font-medium">{typeInfo.label}</div>
                   </div>
 
                   <div>
-                    <span className="text-xs text-gray-600">Identifikator</span>
+                    <span className="text-xs text-gray-600 dark:text-gray-400">Identifikator</span>
                     <div className="text-sm font-mono bg-gray-100 px-2 py-1 rounded">
                       {method.identifier.length > 20 
                         ? `${method.identifier.substring(0, 20)}...` 
@@ -376,7 +376,7 @@ export const AuthorizationMethods: React.FC = () => {
 
                   {(method.validFrom || method.validUntil) && (
                     <div>
-                      <span className="text-xs text-gray-600">Gültigkeit</span>
+                      <span className="text-xs text-gray-600 dark:text-gray-400">Gültigkeit</span>
                       <div className="text-sm">
                         {method.validFrom && `Ab ${new Date(method.validFrom).toLocaleDateString('de-DE')}`}
                         {method.validFrom && method.validUntil && ' - '}
@@ -387,14 +387,14 @@ export const AuthorizationMethods: React.FC = () => {
 
                   {method.lastUsedAt && (
                     <div>
-                      <span className="text-xs text-gray-600">Zuletzt verwendet</span>
+                      <span className="text-xs text-gray-600 dark:text-gray-400">Zuletzt verwendet</span>
                       <div className="text-sm">
                         {new Date(method.lastUsedAt).toLocaleString('de-DE')}
                       </div>
                     </div>
                   )}
 
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
                     Erstellt: {new Date(method.createdAt).toLocaleDateString('de-DE')}
                   </div>
 
@@ -426,8 +426,8 @@ export const AuthorizationMethods: React.FC = () => {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Key className="h-16 w-16 text-gray-300 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Keine Identifikationsmethoden vorhanden</h3>
-            <p className="text-gray-600 mb-4">Fügen Sie RFID-Karten, Autocharge oder andere Methoden hinzu</p>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Keine Identifikationsmethoden vorhanden</h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">Fügen Sie RFID-Karten, Autocharge oder andere Methoden hinzu</p>
             <Button onClick={() => setShowForm(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Methode hinzufügen

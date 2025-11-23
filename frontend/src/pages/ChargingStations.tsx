@@ -37,6 +37,13 @@ export const ChargingStations: React.FC = () => {
   useEffect(() => {
     loadStations();
     loadChargingParks();
+    
+    // Aktualisiere Stationsdaten alle 30 Sekunden
+    const interval = setInterval(() => {
+      loadStations();
+    }, 30000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   // SignalR: Station Status Updates
@@ -49,7 +56,11 @@ export const ChargingStations: React.FC = () => {
       setStations(prevStations => 
         prevStations.map(station => 
           station.id === notification.StationId 
-            ? { ...station, status: notification.Status }
+            ? { 
+                ...station, 
+                status: notification.Status,
+                lastHeartbeat: new Date().toISOString() // Aktualisiere lastHeartbeat bei Status-Updates
+              }
             : station
         )
       );
@@ -62,14 +73,7 @@ export const ChargingStations: React.FC = () => {
   const loadStations = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5126/api/charging-stations', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      if (!response.ok) throw new Error('Failed to fetch stations');
-      const data = await response.json();
+      const data = await api.getChargingStations();
       setStations(data);
     } catch (error) {
       console.error('Failed to load charging stations:', error);
@@ -149,7 +153,36 @@ export const ChargingStations: React.FC = () => {
     'Occupied': 'bg-yellow-500',
     'OutOfOrder': 'bg-red-500',
     'Reserved': 'bg-blue-500',
-    'Unavailable': 'bg-gray-500'
+    'Unavailable': 'bg-gray-500',
+    'Offline': 'bg-gray-400'
+  };
+
+  // Hilfsfunktion: Prüft ob Station online ist (Heartbeat innerhalb der letzten 10 Minuten)
+  const isStationOnline = (station: any): boolean => {
+    if (!station.lastHeartbeat) {
+      console.log(`Station ${station.name}: Kein lastHeartbeat`);
+      return false;
+    }
+    
+    const now = new Date();
+    const lastHeartbeat = new Date(station.lastHeartbeat);
+    const timeSinceHeartbeat = now.getTime() - lastHeartbeat.getTime();
+    const minutesSince = timeSinceHeartbeat / (60 * 1000);
+    
+    console.log(`Station ${station.name}:`, {
+      now: now.toISOString(),
+      lastHeartbeat: lastHeartbeat.toISOString(),
+      minutesSince: minutesSince.toFixed(2),
+      isOnline: timeSinceHeartbeat < 10 * 60 * 1000
+    });
+    
+    return timeSinceHeartbeat < 10 * 60 * 1000; // 10 Minuten
+  };
+
+  // Hilfsfunktion: Bestimmt den tatsächlichen anzuzeigenden Status
+  const getDisplayStatus = (station: any): string => {
+    if (!isStationOnline(station)) return 'Offline';
+    return station.status;
   };
 
   // Show create form
@@ -161,8 +194,8 @@ export const ChargingStations: React.FC = () => {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Neue Ladestation</h1>
-            <p className="text-gray-600 mt-1">Fügen Sie eine neue Ladestation hinzu</p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Neue Ladestation</h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">Fügen Sie eine neue Ladestation hinzu</p>
           </div>
         </div>
 
@@ -283,8 +316,8 @@ export const ChargingStations: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-blue-800">
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <p className="text-sm text-blue-800 dark:text-blue-300">
                   <strong>Hinweis:</strong> Weitere Einstellungen (OCPP, Standort, etc.) können später in den Details bearbeitet werden.
                 </p>
               </div>
@@ -309,8 +342,8 @@ export const ChargingStations: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Ladestationen</h1>
-          <p className="text-gray-600 mt-1">Verwalten Sie Ihre Ladestationen und deren Konfiguration</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Ladestationen</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">Verwalten Sie Ihre Ladestationen und deren Konfiguration</p>
         </div>
         <Button className="flex items-center space-x-2" onClick={() => setShowForm(true)}>
           <Zap className="h-4 w-4" />
@@ -320,8 +353,8 @@ export const ChargingStations: React.FC = () => {
 
       {loading ? (
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-          <span className="ml-2 text-gray-600">Lade Ladestationen...</span>
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400" />
+          <span className="ml-2 text-gray-600 dark:text-gray-400">Lade Ladestationen...</span>
         </div>
       ) : stations.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -330,29 +363,48 @@ export const ChargingStations: React.FC = () => {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg">{station.name}</CardTitle>
-                  <div className={`w-3 h-3 rounded-full ${statusColors[station.status] || 'bg-gray-500'}`} />
+                  <div className="flex items-center space-x-2">
+                    <div className={`w-3 h-3 rounded-full ${statusColors[getDisplayStatus(station)] || 'bg-gray-500'}`} />
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{getDisplayStatus(station)}</span>
+                  </div>
                 </div>
                 <CardDescription className="text-sm">
                   ID: {station.stationId}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Offline Warning */}
+                {!isStationOnline(station) && (
+                  <div className="flex items-center space-x-2 p-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded">
+                    <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
+                      <span className="text-sm font-medium">⚠️ Offline</span>
+                      {station.lastHeartbeat ? (
+                        <span className="text-xs">
+                          (Letzter Heartbeat: {new Date(station.lastHeartbeat).toLocaleString('de-DE')})
+                        </span>
+                      ) : (
+                        <span className="text-xs">(Kein Heartbeat)</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Ladepark Info */}
-                <div className="flex items-center space-x-2 p-2 bg-blue-50 rounded">
-                  <Building2 className="h-4 w-4 text-blue-600" />
+                <div className="flex items-center space-x-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded">
+                  <Building2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                   <div className="text-sm">
-                    <span className="font-medium">{station.chargingPark.name}</span>
+                    <span className="font-medium dark:text-gray-200">{station.chargingPark.name}</span>
                   </div>
                 </div>
 
                 {/* Ladepunkt-Gruppen */}
                 {station.groups && station.groups.length > 0 && (
-                  <div className="flex items-start space-x-2 p-2 bg-indigo-50 rounded">
-                    <Layers className="h-4 w-4 text-indigo-600 mt-0.5" />
+                  <div className="flex items-start space-x-2 p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded">
+                    <Layers className="h-4 w-4 text-indigo-600 dark:text-indigo-400 mt-0.5" />
                     <div className="text-xs">
-                      <div className="font-medium text-indigo-900 mb-1">Gruppen:</div>
+                      <div className="font-medium text-indigo-900 dark:text-indigo-300 mb-1">Gruppen:</div>
                       {station.groups.map((group: any, idx: number) => (
-                        <span key={group.id} className="text-indigo-700">
+                        <span key={group.id} className="text-indigo-700 dark:text-indigo-400">
                           {group.name}{idx < station.groups.length - 1 ? ', ' : ''}
                         </span>
                       ))}
@@ -373,28 +425,28 @@ export const ChargingStations: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <span className="text-gray-600">Hersteller:</span>
-                    <div className="font-medium">{station.vendor}</div>
+                    <span className="text-gray-600 dark:text-gray-400">Hersteller:</span>
+                    <div className="font-medium dark:text-gray-200">{station.vendor}</div>
                   </div>
                   <div>
-                    <span className="text-gray-600">Typ:</span>
-                    <div className="font-medium">{station.type}</div>
+                    <span className="text-gray-600 dark:text-gray-400">Typ:</span>
+                    <div className="font-medium dark:text-gray-200">{station.type}</div>
                   </div>
                 </div>
 
                 {/* OCPP Info */}
                 {station.chargeBoxId && (
-                  <div className="text-xs bg-gray-50 p-2 rounded">
-                    <span className="text-gray-600">ChargeBox-ID: </span>
-                    <span className="font-mono font-medium">{station.chargeBoxId}</span>
+                  <div className="text-xs bg-gray-50 dark:bg-gray-800 p-2 rounded">
+                    <span className="text-gray-600 dark:text-gray-400">ChargeBox-ID: </span>
+                    <span className="font-mono font-medium dark:text-gray-200">{station.chargeBoxId}</span>
                     {station.ocppProtocol && (
-                      <span className="ml-2 text-gray-500">({station.ocppProtocol})</span>
+                      <span className="ml-2 text-gray-500 dark:text-gray-400">({station.ocppProtocol})</span>
                     )}
                   </div>
                 )}
 
                 {station.lastHeartbeat && (
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
                     Letzte Aktivität: {new Date(station.lastHeartbeat).toLocaleString('de-DE')}
                   </div>
                 )}
@@ -425,9 +477,9 @@ export const ChargingStations: React.FC = () => {
       ) : (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
-            <Zap className="h-16 w-16 text-gray-300 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Keine Ladestationen vorhanden</h3>
-            <p className="text-gray-600 mb-4">Fügen Sie Ihre erste Ladestation hinzu</p>
+            <Zap className="h-16 w-16 text-gray-300 dark:text-gray-600 mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Keine Ladestationen vorhanden</h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">Fügen Sie Ihre erste Ladestation hinzu</p>
             <Button onClick={() => setShowForm(true)}>
               <Zap className="h-4 w-4 mr-2" />
               Ladestation hinzufügen

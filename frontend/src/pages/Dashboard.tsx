@@ -21,24 +21,16 @@ export const Dashboard: React.FC = () => {
   const loadData = async () => {
     try {
       // Load sub-tenants count
-      const token = localStorage.getItem('token');
       const userStr = localStorage.getItem('user');
       
       let subTenantsCount = 0;
-      if (token && userStr) {
+      if (userStr) {
         try {
-          const response = await fetch('http://localhost:5126/api/tenants', {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          });
-          if (response.ok) {
-            const tenants = await response.json();
-            const user = JSON.parse(userStr);
-            // Filter out own tenant
-            const filteredTenants = tenants.filter((tenant: any) => tenant.id !== user.tenantId);
-            subTenantsCount = filteredTenants.length;
-          }
+          const tenants = await api.getTenants();
+          const user = JSON.parse(userStr);
+          // Filter out own tenant
+          const filteredTenants = tenants.filter((tenant: any) => tenant.id !== user.tenantId);
+          subTenantsCount = filteredTenants.length;
         } catch (err) {
           console.error('Failed to load sub-tenants:', err);
         }

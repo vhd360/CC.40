@@ -146,9 +146,3 @@ public class AuthController : ControllerBase
         return Ok(result);
     }
 }
-
-        }
-        
-        return Ok(result);
-    }
-}

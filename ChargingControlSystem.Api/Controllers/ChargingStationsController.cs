@@ -84,10 +84,10 @@ public class ChargingStationsController : ControllerBase
                         m.ChargingStationGroup.Name
                     })
                     .ToList(),
-                s.LastHeartbeat,
+                LastHeartbeat = s.LastHeartbeat.HasValue ? DateTime.SpecifyKind(s.LastHeartbeat.Value, DateTimeKind.Utc) : (DateTime?)null,
                 s.ChargeBoxId,
                 s.OcppProtocol,
-                s.CreatedAt
+                CreatedAt = DateTime.SpecifyKind(s.CreatedAt, DateTimeKind.Utc)
             })
             .ToListAsync();
 

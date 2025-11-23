@@ -120,8 +120,12 @@ public class OcppMessageHandler : IOcppMessageHandler
             var previousStatus = station.Status;
             var lastHeartbeatBeforeUpdate = station.LastHeartbeat;
             
+            _logger.LogInformation("Heartbeat from {ChargeBoxId}: Station {StationId} ({StationName}), LastHeartbeat before: {LastHeartbeatBefore}", 
+                chargeBoxId, station.Id, station.Name, lastHeartbeatBeforeUpdate);
+            
             // Update heartbeat
             station.LastHeartbeat = DateTime.UtcNow;
+            _logger.LogInformation("Set LastHeartbeat to: {NewHeartbeat}", station.LastHeartbeat);
             
             // If station was unavailable and now sending heartbeat, mark as available
             if (previousStatus == ChargingStationStatus.Unavailable)
@@ -166,7 +170,7 @@ public class OcppMessageHandler : IOcppMessageHandler
                     else
                     {
                         await context.SaveChangesAsync();
-                        _logger.LogDebug("Station {ChargeBoxId} (ID: {StationId}) heartbeat received, status already Available, no notification sent ({TimeSinceLastHeartbeat}s since last heartbeat)", 
+                        _logger.LogInformation("Station {ChargeBoxId} (ID: {StationId}) heartbeat saved to DB, status already Available ({TimeSinceLastHeartbeat}s since last heartbeat)", 
                             chargeBoxId, station.Id, timeSinceLastHeartbeat);
                     }
                 }

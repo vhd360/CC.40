@@ -297,6 +297,16 @@
             Alle Berechtigungen einer UserGroup auf einmal setzen
             </summary>
         </member>
+        <member name="T:ChargingControlSystem.Api.Converters.UtcDateTimeConverter">
+            <summary>
+            Custom JSON converter that ensures DateTime values are serialized as UTC with 'Z' suffix
+            </summary>
+        </member>
+        <member name="T:ChargingControlSystem.Api.Converters.UtcNullableDateTimeConverter">
+            <summary>
+            Custom JSON converter for nullable DateTime that ensures values are serialized as UTC with 'Z' suffix
+            </summary>
+        </member>
         <member name="T:ChargingControlSystem.Api.Models.LoginRequest">
             <summary>
             Login-Anfrage für Benutzer-Authentifizierung

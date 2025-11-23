@@ -131,8 +131,8 @@ export const ChargingParks: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Ladeparks</h1>
-          <p className="text-gray-600 mt-1">Verwalten Sie Ihre Ladepark-Standorte</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Ladeparks</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">Verwalten Sie Ihre Ladepark-Standorte</p>
         </div>
         <Button onClick={() => setShowForm(true)} className="flex items-center space-x-2">
           <Plus className="h-4 w-4" />
@@ -233,37 +233,3 @@ export const ChargingParks: React.FC = () => {
     </div>
   );
 };
-
-
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Building2 className="h-16 w-16 text-gray-300 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Keine Ladeparks vorhanden</h3>
-            <p className="text-gray-600 mb-4">Legen Sie Ihren ersten Ladepark an</p>
-            <Button onClick={() => setShowForm(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Ladepark anlegen
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Delete Confirmation Dialog */}
-      <ConfirmDialog
-        open={deleteConfirm.open}
-        onOpenChange={(open) => setDeleteConfirm({ ...deleteConfirm, open })}
-        title="Ladepark löschen"
-        message={`Möchten Sie den Ladepark "${deleteConfirm.parkName}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`}
-        confirmText="Löschen"
-        cancelText="Abbrechen"
-        variant="destructive"
-        onConfirm={handleDeleteConfirm}
-      />
-    </div>
-  );
-};
-

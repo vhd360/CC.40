@@ -12,7 +12,9 @@ import {
   LogOut,
   Menu,
   X,
-  User
+  User,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 interface UserLayoutProps {
@@ -23,9 +25,18 @@ export const UserLayout: React.FC<UserLayoutProps> = ({ onLogout }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = React.useState(() => {
+    const saved = localStorage.getItem('userSidebarCollapsed');
+    return saved === 'true';
+  });
 
   const userStr = localStorage.getItem('user');
   const user = userStr ? JSON.parse(userStr) : null;
+  
+  // Speichere Sidebar-Status
+  React.useEffect(() => {
+    localStorage.setItem('userSidebarCollapsed', sidebarCollapsed.toString());
+  }, [sidebarCollapsed]);
 
   const navigation = [
     { name: 'Dashboard', href: '/user/dashboard', icon: LayoutDashboard },
@@ -81,10 +92,26 @@ export const UserLayout: React.FC<UserLayoutProps> = ({ onLogout }) => {
       )}
 
       {/* Desktop sidebar */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
+      <div className={`hidden lg:fixed lg:inset-y-0 lg:flex lg:flex-col transition-all duration-300 ${
+        sidebarCollapsed ? 'lg:w-16' : 'lg:w-64'
+      }`}>
         <div className="flex flex-col flex-grow bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800">
-          <div className="flex h-16 items-center px-4 border-b dark:border-gray-800">
-            <h1 className="text-xl font-bold text-primary">CUBOS.Charge</h1>
+          <div className={`flex h-16 items-center border-b dark:border-gray-800 ${
+            sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-4'
+          }`}>
+            {!sidebarCollapsed && (
+              <h1 className="text-xl font-bold text-primary">CUBOS.Charge</h1>
+            )}
+            <button
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            >
+              {sidebarCollapsed ? (
+                <ChevronRight className="h-5 w-5" />
+              ) : (
+                <ChevronLeft className="h-5 w-5" />
+              )}
+            </button>
           </div>
           <div className="flex-1 flex flex-col overflow-y-auto">
             <nav className="flex-1 space-y-1 px-2 py-4">
@@ -96,10 +123,21 @@ export const UserLayout: React.FC<UserLayoutProps> = ({ onLogout }) => {
                     isActive(item.href)
                       ? 'bg-primary/10 text-primary'
                       : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-100'
-                  } group flex w-full items-center px-3 py-2 text-sm font-medium rounded-md transition-colors`}
+                  } group relative flex w-full items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                    sidebarCollapsed ? 'justify-center' : ''
+                  }`}
+                  title={sidebarCollapsed ? item.name : undefined}
                 >
-                  <item.icon className="mr-3 h-5 w-5 flex-shrink-0" />
-                  {item.name}
+                  <item.icon className={`h-5 w-5 flex-shrink-0 ${sidebarCollapsed ? '' : 'mr-3'}`} />
+                  {!sidebarCollapsed && item.name}
+                  
+                  {/* Tooltip beim Hover im eingeklappten Zustand */}
+                  {sidebarCollapsed && (
+                    <div className="absolute left-full ml-2 px-3 py-2 bg-gray-900 dark:bg-gray-800 text-white text-sm rounded-md opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity shadow-lg">
+                      {item.name}
+                      <div className="absolute left-0 top-1/2 -translate-x-1 -translate-y-1/2 w-2 h-2 bg-gray-900 dark:bg-gray-800 rotate-45"></div>
+                    </div>
+                  )}
                 </button>
               ))}
             </nav>
@@ -108,36 +146,56 @@ export const UserLayout: React.FC<UserLayoutProps> = ({ onLogout }) => {
           {/* User info */}
           {user && (
             <div className="flex-shrink-0 border-t border-gray-200 dark:border-gray-800 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center flex-1">
-                  <div className="flex-shrink-0">
-                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                      <User className="h-6 w-6 text-primary" />
+              {!sidebarCollapsed ? (
+                <>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center flex-1">
+                      <div className="flex-shrink-0">
+                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                          <User className="h-6 w-6 text-primary" />
+                        </div>
+                      </div>
+                      <div className="ml-3 flex-1">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {user.firstName} {user.lastName}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{user.email}</p>
+                      </div>
                     </div>
+                    <ThemeToggle />
                   </div>
-                  <div className="ml-3 flex-1">
-                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {user.firstName} {user.lastName}
-                    </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{user.email}</p>
+                  <button
+                    onClick={onLogout}
+                    className="w-full flex items-center px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-md transition-colors"
+                  >
+                    <LogOut className="mr-3 h-5 w-5" />
+                    Abmelden
+                  </button>
+                </>
+              ) : (
+                <div className="flex flex-col items-center space-y-3">
+                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <User className="h-6 w-6 text-primary" />
                   </div>
+                  <ThemeToggle />
+                  <button
+                    onClick={onLogout}
+                    className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-md transition-colors"
+                    title="Abmelden"
+                  >
+                    <LogOut className="h-5 w-5" />
+                  </button>
                 </div>
-                <ThemeToggle />
-              </div>
-              <button
-                onClick={onLogout}
-                className="w-full flex items-center px-3 py-2 text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-md transition-colors"
-              >
-                <LogOut className="mr-3 h-5 w-5" />
-                Abmelden
-              </button>
+              )}
             </div>
           )}
         </div>
       </div>
 
       {/* Main content */}
-      <div className="lg:pl-64 flex flex-col flex-1">
+      <div className={`flex flex-col flex-1 transition-all duration-300 ${
+        sidebarCollapsed ? 'lg:pl-16' : 'lg:pl-64'
+      }`}>
         {/* Mobile header */}
         <div className="sticky top-0 z-10 lg:hidden flex h-16 items-center justify-between gap-x-4 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-4">
           <div className="flex items-center gap-x-4">

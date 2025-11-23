@@ -48,10 +48,3 @@ public class RequireRoleAttribute : Attribute, IAuthorizationFilter
 }
 
 
-
-            return;
-        }
-    }
-}
-
-

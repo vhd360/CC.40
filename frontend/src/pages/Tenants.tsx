@@ -5,6 +5,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Users, Building2, Loader2, Plus, Eye, X } from 'lucide-react';
+import { api } from '../services/api';
 
 export const Tenants: React.FC = () => {
   const [tenants, setTenants] = useState<any[]>([]);
@@ -20,16 +21,9 @@ export const Tenants: React.FC = () => {
   const loadTenants = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
       const userStr = localStorage.getItem('user');
       
-      const response = await fetch('http://localhost:5126/api/tenants', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      if (!response.ok) throw new Error('Failed to fetch tenants');
-      const data = await response.json();
+      const data = await api.getTenants();
       
       // Filter out the current user's own tenant
       if (userStr) {
@@ -53,29 +47,14 @@ export const Tenants: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5126/api/tenants', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        alert(error.error || 'Fehler beim Erstellen des Tenants');
-        return;
-      }
-
+      await api.createTenant(formData as any);
       setShowForm(false);
       setFormData({ name: '', subdomain: '', description: '' });
       loadTenants();
       alert('Tenant erfolgreich erstellt!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to create tenant:', error);
-      alert('Fehler beim Erstellen des Tenants');
+      alert(error.message || 'Fehler beim Erstellen des Tenants');
     }
   };
 
@@ -117,9 +96,9 @@ export const Tenants: React.FC = () => {
                       pattern="[a-z0-9-]+"
                       required
                     />
-                    <span className="text-sm text-gray-500">.chargingcontrol.com</span>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">.chargingcontrol.com</span>
                   </div>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
                     Nur Kleinbuchstaben, Zahlen und Bindestriche. Dies wird die URL des Tenants.
                   </p>
                 </div>
@@ -163,8 +142,8 @@ export const Tenants: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Tenants</h1>
-          <p className="text-gray-600 mt-1">Verwalten Sie Ihre Mandanten und Sub-Tenants</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Tenants</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">Verwalten Sie Ihre Mandanten und Sub-Tenants</p>
         </div>
         <Button onClick={() => setShowForm(true)} className="flex items-center space-x-2">
           <Plus className="h-4 w-4" />
@@ -175,7 +154,7 @@ export const Tenants: React.FC = () => {
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-          <span className="ml-2 text-gray-600">Lade Tenants...</span>
+          <span className="ml-2 text-gray-600 dark:text-gray-400">Lade Tenants...</span>
         </div>
       ) : tenants.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -195,24 +174,24 @@ export const Tenants: React.FC = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 {tenant.description && (
-                  <p className="text-sm text-gray-600">{tenant.description}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{tenant.description}</p>
                 )}
 
                 <div className="grid grid-cols-2 gap-2 text-sm">
                   <div className="flex items-center space-x-2">
-                    <Users className="h-4 w-4 text-gray-500" />
-                    <span className="text-gray-700">{tenant.userCount} Benutzer</span>
+                    <Users className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                    <span className="text-gray-700 dark:text-gray-300">{tenant.userCount} Benutzer</span>
                   </div>
                   
                   {tenant.subTenantCount > 0 && (
                     <div className="flex items-center space-x-2">
-                      <Building2 className="h-4 w-4 text-gray-500" />
-                      <span className="text-gray-700">{tenant.subTenantCount} Sub-Tenants</span>
+                      <Building2 className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+                      <span className="text-gray-700 dark:text-gray-300">{tenant.subTenantCount} Sub-Tenants</span>
                     </div>
                   )}
                 </div>
 
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-gray-500 dark:text-gray-400">
                   Erstellt: {new Date(tenant.createdAt).toLocaleDateString('de-DE')}
                 </div>
 
@@ -235,8 +214,8 @@ export const Tenants: React.FC = () => {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Building2 className="h-16 w-16 text-gray-300 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Keine Sub-Tenants vorhanden</h3>
-            <p className="text-gray-600 mb-4">Erstellen Sie Ihren ersten Sub-Tenant</p>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Keine Sub-Tenants vorhanden</h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">Erstellen Sie Ihren ersten Sub-Tenant</p>
             <Button onClick={() => setShowForm(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Sub-Tenant erstellen

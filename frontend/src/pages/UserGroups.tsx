@@ -140,8 +140,8 @@ export const UserGroups: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Nutzergruppen</h1>
-          <p className="text-gray-600 mt-1">Verwalten Sie Benutzergruppen und Berechtigungen</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Nutzergruppen</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">Verwalten Sie Benutzergruppen und Berechtigungen</p>
         </div>
         <Button onClick={() => setShowForm(true)} className="flex items-center space-x-2">
           <Plus className="h-4 w-4" />
@@ -152,7 +152,7 @@ export const UserGroups: React.FC = () => {
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-          <span className="ml-2 text-gray-600">Lade Nutzergruppen...</span>
+          <span className="ml-2 text-gray-600 dark:text-gray-400">Lade Nutzergruppen...</span>
         </div>
       ) : groups.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -175,16 +175,16 @@ export const UserGroups: React.FC = () => {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <span className="text-sm text-gray-600">Mitglieder</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Mitglieder</span>
                     <div className="text-2xl font-bold text-blue-600">{group.memberCount}</div>
                   </div>
                   <div>
-                    <span className="text-sm text-gray-600">Berechtigungen</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">Berechtigungen</span>
                     <div className="text-2xl font-bold text-green-600">{group.permissionCount}</div>
                   </div>
                 </div>
 
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-gray-500 dark:text-gray-400">
                   Erstellt: {new Date(group.createdAt).toLocaleDateString('de-DE')}
                 </div>
 
@@ -225,8 +225,8 @@ export const UserGroups: React.FC = () => {
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Users className="h-16 w-16 text-gray-300 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Keine Nutzergruppen vorhanden</h3>
-            <p className="text-gray-600 mb-4">Erstellen Sie Ihre erste Nutzergruppe</p>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Keine Nutzergruppen vorhanden</h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">Erstellen Sie Ihre erste Nutzergruppe</p>
             <Button onClick={() => setShowForm(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Gruppe erstellen

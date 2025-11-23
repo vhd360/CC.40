@@ -129,9 +129,23 @@ export interface Tenant {
   name: string;
   subdomain: string;
   description?: string;
+  address?: string;
+  postalCode?: string;
+  city?: string;
+  country?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
+  taxId?: string;
+  logoUrl?: string;
+  theme?: number;
   isActive: boolean;
   createdAt: string;
+  updatedAt?: string;
   userCount: number;
+  chargingParkCount?: number;
+  vehicleCount?: number;
+  subTenantCount?: number;
 }
 
 export interface ChargingStation {
@@ -459,6 +473,36 @@ export const api = {
     const response = await fetchWithAuth(`${API_BASE_URL}/tenants/${id}`);
     if (!response.ok) throw new Error('Failed to fetch tenant');
     return response.json();
+  },
+
+  async uploadTenantLogo(file: File): Promise<{ logoUrl: string }> {
+    const token = localStorage.getItem('token');
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await fetch(`${API_BASE_URL}/upload/tenant-logo`, {
+      method: 'POST',
+      headers: {
+        ...(token && { 'Authorization': `Bearer ${token}` })
+      },
+      body: formData,
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to upload logo');
+    }
+    return response.json();
+  },
+
+  async deleteTenantLogo(): Promise<void> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/upload/tenant-logo`, {
+      method: 'DELETE'
+    });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to delete logo');
+    }
   },
 
   // Users
@@ -1204,6 +1248,30 @@ export const api = {
     const response = await fetchWithAuth(`${API_BASE_URL}/charging/stations/${stationId}/connectors`);
     if (!response.ok) throw new Error('Failed to fetch station connectors');
     return response.json();
+  },
+
+  // Profile Management
+  async updateProfile(data: { firstName: string; lastName: string; email: string; phoneNumber?: string }): Promise<any> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/users/profile`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to update profile');
+    }
+    return response.json();
+  },
+
+  async changePassword(data: { currentPassword: string; newPassword: string }): Promise<void> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/users/change-password`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to change password');
+    }
   }
 };
 

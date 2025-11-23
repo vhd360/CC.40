@@ -220,6 +220,3 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
     </div>
   );
 };
-
-  );
-};

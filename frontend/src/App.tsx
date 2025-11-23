@@ -11,6 +11,7 @@ import { Tenants } from './pages/Tenants';
 import { TenantRegister } from './pages/TenantRegister';
 import { TenantDetail } from './pages/TenantDetail';
 import { TenantSettings } from './pages/TenantSettings';
+import { Profile } from './pages/Profile';
 import { ChargingParks } from './pages/ChargingParks';
 import { ChargingStations } from './pages/ChargingStations';
 import { ChargingStationDetail } from './pages/ChargingStationDetail';
@@ -139,6 +140,7 @@ function App() {
           {isAuthenticated && isAdmin && (
             <Route path="/*" element={<AdminLayout onLogout={handleLogout} />}>
               <Route index element={<Dashboard />} />
+              <Route path="profile" element={<Profile />} />
               <Route path="settings" element={<TenantSettings />} />
               <Route path="tenants" element={<Tenants />} />
               <Route path="tenants/:id" element={<TenantDetail />} />

@@ -5,6 +5,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Building2, Save, Loader2, CheckCircle, Upload, Trash2, Image as ImageIcon } from 'lucide-react';
 import { themes, TenantTheme } from '../themes/tenantThemes';
+import { api } from '../services/api';
 
 interface TenantSettings {
   id: string;
@@ -46,29 +47,19 @@ export const TenantSettings: React.FC = () => {
     try {
       setLoading(true);
       
-      // Get current user and token from localStorage
-      const token = localStorage.getItem('token');
+      // Get current user from localStorage
       const userStr = localStorage.getItem('user');
       
-      if (!token || !userStr) {
+      if (!userStr) {
         throw new Error('Not authenticated');
       }
       
       const user = JSON.parse(userStr);
       const tenantId = user.tenantId;
       
-      // Fetch tenant details with authorization
-      const response = await fetch(`http://localhost:5126/api/tenants/${tenantId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!response.ok) throw new Error('Failed to load settings');
-      
-      const data = await response.json();
-      setSettings(data);
+      // Fetch tenant details
+      const data = await api.getTenantById(tenantId);
+      setSettings(data as any);
     } catch (err) {
       setError('Fehler beim Laden der Einstellungen');
       console.error(err);
@@ -86,38 +77,21 @@ export const TenantSettings: React.FC = () => {
       setError('');
       setSaveSuccess(false);
 
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('Not authenticated');
-      }
-
-      const response = await fetch(`http://localhost:5126/api/tenants/${settings.id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          name: settings.name,
-          subdomain: settings.subdomain,
-          description: settings.description,
-          address: settings.address,
-          postalCode: settings.postalCode,
-          city: settings.city,
-          country: settings.country,
-          phone: settings.phone,
-          email: settings.email,
-          website: settings.website,
-          taxId: settings.taxId,
-          theme: settings.theme,
-          isActive: settings.isActive
-        }),
+      await api.updateTenant(settings.id, {
+        name: settings.name,
+        subdomain: settings.subdomain,
+        description: settings.description,
+        address: settings.address,
+        postalCode: settings.postalCode,
+        city: settings.city,
+        country: settings.country,
+        phone: settings.phone,
+        email: settings.email,
+        website: settings.website,
+        taxId: settings.taxId,
+        theme: settings.theme,
+        isActive: settings.isActive
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Fehler beim Speichern');
-      }
 
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -146,28 +120,7 @@ export const TenantSettings: React.FC = () => {
       setUploadingLogo(true);
       setError('');
 
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('Not authenticated');
-      }
-
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch('http://localhost:5126/api/upload/tenant-logo', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Fehler beim Hochladen des Logos');
-      }
-
-      const data = await response.json();
+      const data = await api.uploadTenantLogo(file);
       
       if (settings) {
         setSettings({ ...settings, logoUrl: data.logoUrl });
@@ -200,22 +153,7 @@ export const TenantSettings: React.FC = () => {
       setUploadingLogo(true);
       setError('');
 
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('Not authenticated');
-      }
-
-      const response = await fetch('http://localhost:5126/api/upload/tenant-logo', {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Fehler beim Löschen des Logos');
-      }
+      await api.deleteTenantLogo();
 
       if (settings) {
         setSettings({ ...settings, logoUrl: undefined });
@@ -263,8 +201,8 @@ export const TenantSettings: React.FC = () => {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Mandanten-Einstellungen</h1>
-          <p className="text-gray-600 mt-1">Verwalten Sie die Einstellungen Ihres Unternehmens</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Mandanten-Einstellungen</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">Verwalten Sie die Einstellungen Ihres Unternehmens</p>
         </div>
         <Building2 className="h-10 w-10 text-blue-600" />
       </div>
@@ -274,24 +212,24 @@ export const TenantSettings: React.FC = () => {
         <Card>
           <CardContent className="pt-6">
             <div className="text-center">
-              <p className="text-sm text-gray-600">Benutzer</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">{settings.userCount}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Benutzer</p>
+              <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 mt-2">{settings.userCount}</p>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <div className="text-center">
-              <p className="text-sm text-gray-600">Ladeparks</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">{settings.chargingParkCount}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Ladeparks</p>
+              <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 mt-2">{settings.chargingParkCount}</p>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <div className="text-center">
-              <p className="text-sm text-gray-600">Fahrzeuge</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">{settings.vehicleCount}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Fahrzeuge</p>
+              <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 mt-2">{settings.vehicleCount}</p>
             </div>
           </CardContent>
         </Card>
@@ -309,7 +247,7 @@ export const TenantSettings: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Basic Information */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900">Basisinformationen</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Basisinformationen</h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -330,7 +268,7 @@ export const TenantSettings: React.FC = () => {
                     disabled
                     className="bg-gray-100"
                   />
-                  <p className="text-xs text-gray-500">{settings.subdomain}.chargingcontrol.com</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{settings.subdomain}.chargingcontrol.com</p>
                 </div>
               </div>
 
@@ -350,7 +288,7 @@ export const TenantSettings: React.FC = () => {
 
             {/* Branding */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900">Branding</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Branding</h3>
               
               {/* Logo Upload */}
               <div className="space-y-2">
@@ -430,7 +368,7 @@ export const TenantSettings: React.FC = () => {
                   onChange={handleLogoUpload}
                   className="hidden"
                 />
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   Empfohlen: Transparentes PNG oder SVG, max. 5 MB
                 </p>
               </div>
@@ -471,7 +409,7 @@ export const TenantSettings: React.FC = () => {
 
             {/* Address Information */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900">Adresse</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Adresse</h3>
               
               <div className="space-y-2">
                 <Label htmlFor="address">Straße und Hausnummer</Label>
@@ -520,7 +458,7 @@ export const TenantSettings: React.FC = () => {
 
             {/* Contact Information */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900">Kontaktinformationen</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Kontaktinformationen</h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -562,7 +500,7 @@ export const TenantSettings: React.FC = () => {
 
             {/* Tax Information */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900">Steuerinformationen</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Steuerinformationen</h3>
               
               <div className="space-y-2">
                 <Label htmlFor="taxId">Steuernummer / USt-IdNr.</Label>
@@ -610,7 +548,7 @@ export const TenantSettings: React.FC = () => {
         </CardContent>
       </Card>
 
-      <div className="text-sm text-gray-500">
+      <div className="text-sm text-gray-500 dark:text-gray-400">
         <p>Erstellt am: {new Date(settings.createdAt).toLocaleString('de-DE')}</p>
         {settings.updatedAt && (
           <p>Zuletzt aktualisiert: {new Date(settings.updatedAt).toLocaleString('de-DE')}</p>

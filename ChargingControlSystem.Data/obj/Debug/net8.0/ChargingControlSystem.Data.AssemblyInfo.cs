@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ChargingControlSystem.Data")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+37f55efdc24522fecc1b4ebdbdbe59050525b369")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+dd6dcf930e34ff6b8f65aa6fa89043e1db87f307")]
 [assembly: System.Reflection.AssemblyProductAttribute("ChargingControlSystem.Data")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ChargingControlSystem.Data")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

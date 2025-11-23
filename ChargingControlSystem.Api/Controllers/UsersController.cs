@@ -284,6 +284,64 @@ public class UsersController : ControllerBase
             Groups = memberships.Select(m => m.UserGroup.Name).ToList()
         });
     }
+
+    [HttpPut("profile")]
+    public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileDto dto)
+    {
+        var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
+            return Unauthorized();
+
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null)
+            return NotFound("User not found");
+
+        // Check if email is already in use by another user
+        if (dto.Email != user.Email)
+        {
+            var emailExists = await _context.Users.AnyAsync(u => u.Email == dto.Email && u.Id != userId);
+            if (emailExists)
+                return BadRequest(new { message = "Diese E-Mail-Adresse wird bereits verwendet" });
+        }
+
+        user.FirstName = dto.FirstName;
+        user.LastName = dto.LastName;
+        user.Email = dto.Email;
+        user.PhoneNumber = dto.PhoneNumber;
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            id = user.Id,
+            firstName = user.FirstName,
+            lastName = user.LastName,
+            email = user.Email,
+            phoneNumber = user.PhoneNumber
+        });
+    }
+
+    [HttpPost("change-password")]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto dto)
+    {
+        var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (string.IsNullOrEmpty(userIdClaim) || !Guid.TryParse(userIdClaim, out var userId))
+            return Unauthorized();
+
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null)
+            return NotFound("User not found");
+
+        // Verify current password
+        if (!BCrypt.Net.BCrypt.Verify(dto.CurrentPassword, user.PasswordHash))
+            return BadRequest(new { message = "Das aktuelle Passwort ist falsch" });
+
+        // Hash and save new password
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "Passwort erfolgreich geändert" });
+    }
 }
 
 public record CreateUserDto(
@@ -296,4 +354,6 @@ public record CreateUserDto(
     UserRole Role
 );
 public record UpdateUserDto(string FirstName, string LastName, string Email, string? PhoneNumber, bool IsActive, string? Password);
+public record UpdateProfileDto(string FirstName, string LastName, string Email, string? PhoneNumber);
+public record ChangePasswordDto(string CurrentPassword, string NewPassword);
 

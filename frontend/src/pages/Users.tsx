@@ -130,8 +130,8 @@ export const Users: React.FC = () => {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Neuer Benutzer</h1>
-            <p className="text-gray-600 mt-1">Fügen Sie einen neuen Benutzer hinzu</p>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Neuer Benutzer</h1>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">Fügen Sie einen neuen Benutzer hinzu</p>
           </div>
         </div>
 
@@ -215,7 +215,7 @@ export const Users: React.FC = () => {
                   <option value="User">Benutzer (User)</option>
                   <option value="TenantAdmin">Tenant Administrator</option>
                 </select>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   <strong>Benutzer:</strong> Kann Fahrzeuge und Ladevorgänge verwalten.<br />
                   <strong>Tenant Administrator:</strong> Kann zusätzlich Benutzer und Sub-Tenants verwalten.
                 </p>
@@ -247,8 +247,8 @@ export const Users: React.FC = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Benutzer</h1>
-          <p className="text-gray-600 mt-1">Verwalten Sie die Benutzer Ihres Tenants</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Benutzer</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">Verwalten Sie die Benutzer Ihres Tenants</p>
         </div>
         <Button onClick={() => setShowUserForm(true)}>
           <Plus className="h-4 w-4 mr-2" />
@@ -259,7 +259,7 @@ export const Users: React.FC = () => {
       {loading ? (
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-          <span className="ml-2 text-gray-600">Lade Benutzer...</span>
+          <span className="ml-2 text-gray-600 dark:text-gray-400">Lade Benutzer...</span>
         </div>
       ) : (
         <Card>
@@ -300,7 +300,7 @@ export const Users: React.FC = () => {
                               Eingeladen
                             </Badge>
                             {user.groupMemberships && user.groupMemberships.length > 0 && (
-                              <div className="text-xs text-gray-500 mt-1">
+                              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                                 Gruppen: {user.groupMemberships.join(', ')}
                               </div>
                             )}
@@ -352,8 +352,8 @@ export const Users: React.FC = () => {
             ) : (
               <div className="flex flex-col items-center justify-center py-12">
                 <UsersIcon className="h-16 w-16 text-gray-300 mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Keine Benutzer vorhanden</h3>
-                <p className="text-gray-600 mb-4">Legen Sie den ersten Benutzer für Ihren Tenant an</p>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Keine Benutzer vorhanden</h3>
+                <p className="text-gray-600 dark:text-gray-400 mb-4">Legen Sie den ersten Benutzer für Ihren Tenant an</p>
                 <Button onClick={() => setShowUserForm(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   Benutzer anlegen

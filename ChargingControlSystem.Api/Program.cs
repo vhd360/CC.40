@@ -7,8 +7,6 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
 using System.Reflection;
-using System.Diagnostics;
-using System.Runtime.InteropServices;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,6 +18,9 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
         // Use camelCase for JSON property names (JavaScript/TypeScript convention)
         options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+        // Serialize DateTime as UTC with 'Z' suffix so JavaScript parses it correctly
+        options.JsonSerializerOptions.Converters.Add(new ChargingControlSystem.Api.Converters.UtcDateTimeConverter());
+        options.JsonSerializerOptions.Converters.Add(new ChargingControlSystem.Api.Converters.UtcNullableDateTimeConverter());
     });
 
 // Add SignalR for real-time notifications
@@ -262,10 +263,23 @@ builder.Services.AddSingleton<IDbContextFactory<ApplicationDbContext>>(sp =>
     }
     return new SimpleDbContextFactory(connectionString);
 });
-builder.Services.AddTransient<ChargingControlSystem.OCPP.Handlers.IOcppMessageHandler, ChargingControlSystem.OCPP.Handlers.OcppMessageHandler>();
+// Register OcppMessageHandler with ServiceProvider factory for SignalR notifications
+builder.Services.AddTransient<ChargingControlSystem.OCPP.Handlers.IOcppMessageHandler>(sp =>
+{
+    var contextFactory = sp.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+    var logger = sp.GetRequiredService<ILogger<ChargingControlSystem.OCPP.Handlers.OcppMessageHandler>>();
+    
+    // Create a factory function that returns the root service provider
+    // This allows the OcppMessageHandler to resolve services like INotificationService
+    Func<IServiceProvider> serviceProviderFactory = () => sp;
+    
+    return new ChargingControlSystem.OCPP.Handlers.OcppMessageHandler(
+        contextFactory,
+        logger,
+        serviceProviderFactory);
+});
 builder.Services.AddSingleton<ChargingControlSystem.OCPP.Server.OcppWebSocketServer>();
 builder.Services.AddHostedService<ChargingControlSystem.OCPP.Services.OcppHostedService>();
-builder.Services.AddScoped<IBillingService, BillingService>();
 builder.Services.AddScoped<IInvoicePdfService, InvoicePdfService>();
 builder.Services.AddScoped<IQrCodeService, QrCodeService>();
 
@@ -348,131 +362,6 @@ app.MapGet("/health", () => Results.Ok(new
 // SignalR Hub für Echtzeit-Benachrichtigungen (mit CORS Policy)
 app.MapHub<ChargingControlSystem.Api.Hubs.NotificationHub>("/hubs/notifications")
     .RequireCors("AllowFrontend");
-
-// Frontend Development Server Starter (lokale Funktionen)
-void StartFrontendDevelopmentServer()
-{
-    try
-    {
-        var solutionPath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
-        var frontendPath = Path.Combine(solutionPath, "frontend");
-        
-        if (!Directory.Exists(frontendPath))
-        {
-            Console.WriteLine("⚠️ Frontend-Verzeichnis nicht gefunden: " + frontendPath);
-            return;
-        }
-
-        // Prüfe, ob npm/node verfügbar ist
-        var nodeCheck = new ProcessStartInfo
-        {
-            FileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "node" : "node",
-            Arguments = "--version",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        try
-        {
-            using var nodeProcess = Process.Start(nodeCheck);
-            if (nodeProcess == null)
-            {
-                Console.WriteLine("⚠️ Node.js nicht gefunden. Frontend wird nicht automatisch gestartet.");
-                return;
-            }
-            nodeProcess.WaitForExit(2000);
-        }
-        catch
-        {
-            Console.WriteLine("⚠️ Node.js nicht gefunden. Frontend wird nicht automatisch gestartet.");
-            return;
-        }
-
-        // Starte npm start im Frontend-Verzeichnis
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "cmd.exe" : "/bin/bash",
-            Arguments = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) 
-                ? $"/c cd /d \"{frontendPath}\" && npm start" 
-                : $"-c \"cd '{frontendPath}' && npm start\"",
-            WorkingDirectory = frontendPath,
-            UseShellExecute = false,
-            CreateNoWindow = false,
-            RedirectStandardOutput = false,
-            RedirectStandardError = false
-        };
-
-        var frontendProcess = Process.Start(startInfo);
-        if (frontendProcess != null)
-        {
-            Console.WriteLine("✅ Frontend Development Server wird gestartet...");
-            Console.WriteLine($"📁 Frontend-Verzeichnis: {frontendPath}");
-            
-            // Warte kurz, dann öffne Browser
-            Task.Delay(5000).ContinueWith(_ =>
-            {
-                try
-                {
-                    var browserUrl = "http://localhost:3000";
-                    OpenBrowser(browserUrl);
-                    Console.WriteLine($"🌐 Browser geöffnet: {browserUrl}");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"⚠️ Browser konnte nicht automatisch geöffnet werden: {ex.Message}");
-                    Console.WriteLine("💡 Bitte öffnen Sie manuell: http://localhost:3000");
-                }
-            });
-        }
-        else
-        {
-            Console.WriteLine("⚠️ Frontend konnte nicht gestartet werden.");
-        }
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"⚠️ Fehler beim Starten des Frontend Development Servers: {ex.Message}");
-        Console.WriteLine("💡 Bitte starten Sie das Frontend manuell mit: cd frontend && npm start");
-    }
-}
-
-void OpenBrowser(string url)
-{
-    try
-    {
-        Process.Start(new ProcessStartInfo
-        {
-            FileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? url
-                : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? "open"
-                : "xdg-open",
-            Arguments = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? null : url,
-            UseShellExecute = true,
-            CreateNoWindow = true
-        });
-    }
-    catch
-    {
-        // Fallback: Versuche mit cmd/start auf Windows
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = "cmd.exe",
-                Arguments = $"/c start {url}",
-                UseShellExecute = false,
-                CreateNoWindow = true
-            });
-        }
-    }
-}
-
-// Start Frontend automatisch im Development-Modus
-if (app.Environment.IsDevelopment())
-{
-    StartFrontendDevelopmentServer();
-}
 
 app.Run();
 
