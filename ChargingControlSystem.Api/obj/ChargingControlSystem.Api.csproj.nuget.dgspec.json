@@ -1,23 +1,23 @@
 {
   "format": 1,
   "restore": {
-    "D:\\CC.40\\ChargingControlSystem.Api\\ChargingControlSystem.Api.csproj": {}
+    "C:\\Users\\gva6397\\source\\repos\\CC.40\\ChargingControlSystem.Api\\ChargingControlSystem.Api.csproj": {}
   },
   "projects": {
-    "D:\\CC.40\\ChargingControlSystem.Api\\ChargingControlSystem.Api.csproj": {
+    "C:\\Users\\gva6397\\source\\repos\\CC.40\\ChargingControlSystem.Api\\ChargingControlSystem.Api.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\CC.40\\ChargingControlSystem.Api\\ChargingControlSystem.Api.csproj",
+        "projectUniqueName": "C:\\Users\\gva6397\\source\\repos\\CC.40\\ChargingControlSystem.Api\\ChargingControlSystem.Api.csproj",
         "projectName": "ChargingControlSystem.Api",
-        "projectPath": "D:\\CC.40\\ChargingControlSystem.Api\\ChargingControlSystem.Api.csproj",
-        "packagesPath": "C:\\Users\\User\\.nuget\\packages\\",
-        "outputPath": "D:\\CC.40\\ChargingControlSystem.Api\\obj\\",
+        "projectPath": "C:\\Users\\gva6397\\source\\repos\\CC.40\\ChargingControlSystem.Api\\ChargingControlSystem.Api.csproj",
+        "packagesPath": "C:\\Users\\gva6397\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\gva6397\\source\\repos\\CC.40\\ChargingControlSystem.Api\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
         ],
         "configFilePaths": [
-          "C:\\Users\\User\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Users\\gva6397\\AppData\\Roaming\\NuGet\\NuGet.Config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
@@ -33,11 +33,11 @@
           "net8.0": {
             "targetAlias": "net8.0",
             "projectReferences": {
-              "D:\\CC.40\\ChargingControlSystem.Data\\ChargingControlSystem.Data.csproj": {
-                "projectPath": "D:\\CC.40\\ChargingControlSystem.Data\\ChargingControlSystem.Data.csproj"
+              "C:\\Users\\gva6397\\source\\repos\\CC.40\\ChargingControlSystem.Data\\ChargingControlSystem.Data.csproj": {
+                "projectPath": "C:\\Users\\gva6397\\source\\repos\\CC.40\\ChargingControlSystem.Data\\ChargingControlSystem.Data.csproj"
               },
-              "D:\\CC.40\\ChargingControlSystem.OCPP\\ChargingControlSystem.OCPP.csproj": {
-                "projectPath": "D:\\CC.40\\ChargingControlSystem.OCPP\\ChargingControlSystem.OCPP.csproj"
+              "C:\\Users\\gva6397\\source\\repos\\CC.40\\ChargingControlSystem.OCPP\\ChargingControlSystem.OCPP.csproj": {
+                "projectPath": "C:\\Users\\gva6397\\source\\repos\\CC.40\\ChargingControlSystem.OCPP\\ChargingControlSystem.OCPP.csproj"
               }
             }
           }
@@ -114,24 +114,24 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.308/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.304/PortableRuntimeIdentifierGraph.json"
         }
       }
     },
-    "D:\\CC.40\\ChargingControlSystem.Data\\ChargingControlSystem.Data.csproj": {
+    "C:\\Users\\gva6397\\source\\repos\\CC.40\\ChargingControlSystem.Data\\ChargingControlSystem.Data.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\CC.40\\ChargingControlSystem.Data\\ChargingControlSystem.Data.csproj",
+        "projectUniqueName": "C:\\Users\\gva6397\\source\\repos\\CC.40\\ChargingControlSystem.Data\\ChargingControlSystem.Data.csproj",
         "projectName": "ChargingControlSystem.Data",
-        "projectPath": "D:\\CC.40\\ChargingControlSystem.Data\\ChargingControlSystem.Data.csproj",
-        "packagesPath": "C:\\Users\\User\\.nuget\\packages\\",
-        "outputPath": "D:\\CC.40\\ChargingControlSystem.Data\\obj\\",
+        "projectPath": "C:\\Users\\gva6397\\source\\repos\\CC.40\\ChargingControlSystem.Data\\ChargingControlSystem.Data.csproj",
+        "packagesPath": "C:\\Users\\gva6397\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\gva6397\\source\\repos\\CC.40\\ChargingControlSystem.Data\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
         ],
         "configFilePaths": [
-          "C:\\Users\\User\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Users\\gva6397\\AppData\\Roaming\\NuGet\\NuGet.Config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
@@ -190,24 +190,24 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.308/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.304/PortableRuntimeIdentifierGraph.json"
         }
       }
     },
-    "D:\\CC.40\\ChargingControlSystem.OCPP\\ChargingControlSystem.OCPP.csproj": {
+    "C:\\Users\\gva6397\\source\\repos\\CC.40\\ChargingControlSystem.OCPP\\ChargingControlSystem.OCPP.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\CC.40\\ChargingControlSystem.OCPP\\ChargingControlSystem.OCPP.csproj",
+        "projectUniqueName": "C:\\Users\\gva6397\\source\\repos\\CC.40\\ChargingControlSystem.OCPP\\ChargingControlSystem.OCPP.csproj",
         "projectName": "ChargingControlSystem.OCPP",
-        "projectPath": "D:\\CC.40\\ChargingControlSystem.OCPP\\ChargingControlSystem.OCPP.csproj",
-        "packagesPath": "C:\\Users\\User\\.nuget\\packages\\",
-        "outputPath": "D:\\CC.40\\ChargingControlSystem.OCPP\\obj\\",
+        "projectPath": "C:\\Users\\gva6397\\source\\repos\\CC.40\\ChargingControlSystem.OCPP\\ChargingControlSystem.OCPP.csproj",
+        "packagesPath": "C:\\Users\\gva6397\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\gva6397\\source\\repos\\CC.40\\ChargingControlSystem.OCPP\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
         ],
         "configFilePaths": [
-          "C:\\Users\\User\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Users\\gva6397\\AppData\\Roaming\\NuGet\\NuGet.Config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],
@@ -223,8 +223,8 @@
           "net8.0": {
             "targetAlias": "net8.0",
             "projectReferences": {
-              "D:\\CC.40\\ChargingControlSystem.Data\\ChargingControlSystem.Data.csproj": {
-                "projectPath": "D:\\CC.40\\ChargingControlSystem.Data\\ChargingControlSystem.Data.csproj"
+              "C:\\Users\\gva6397\\source\\repos\\CC.40\\ChargingControlSystem.Data\\ChargingControlSystem.Data.csproj": {
+                "projectPath": "C:\\Users\\gva6397\\source\\repos\\CC.40\\ChargingControlSystem.Data\\ChargingControlSystem.Data.csproj"
               }
             }
           }
@@ -274,7 +274,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.308/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.304/PortableRuntimeIdentifierGraph.json"
         }
       }
     }

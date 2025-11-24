@@ -86,7 +86,7 @@ export const ChargingStationDetail: React.FC = () => {
         type: data.type === 'AC' ? 0 : 1,
         maxPower: data.maxPower,
         numberOfConnectors: data.numberOfConnectors,
-        status: ['Available', 'Occupied', 'OutOfOrder', 'Reserved', 'Unavailable'].indexOf(data.status),
+        status: ['Available', 'Occupied', 'OutOfOrder', 'Reserved', 'Unavailable', 'Offline'].indexOf(data.status),
         latitude: data.latitude || '',
         longitude: data.longitude || '',
         notes: data.notes || '',
@@ -346,7 +346,8 @@ export const ChargingStationDetail: React.FC = () => {
       'Faulted': 4,
       'Unavailable': 5,
       'Preparing': 6,
-      'Finishing': 7
+      'Finishing': 7,
+      'Offline': 8
     };
     
     const editData = {
@@ -508,7 +509,30 @@ export const ChargingStationDetail: React.FC = () => {
     'Occupied': 'bg-yellow-100 text-yellow-800',
     'OutOfOrder': 'bg-red-100 text-red-800',
     'Reserved': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-    'Unavailable': 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
+    'Unavailable': 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
+    'Offline': 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+  };
+
+  // Konvertiere Status-Zahl zurück zu String für Anzeige (ChargingStation)
+  const getStatusDisplay = (status: number | string | undefined | null): string => {
+    if (status === null || status === undefined) return 'Unknown';
+    if (typeof status === 'string') return status;
+    if (typeof status === 'number') {
+      const statusNames = ['Available', 'Occupied', 'OutOfOrder', 'Reserved', 'Unavailable', 'Offline'];
+      return statusNames[status] || 'Unknown';
+    }
+    return 'Unknown';
+  };
+
+  // Konvertiere Status-Zahl zurück zu String für Anzeige (ChargingPoint)
+  const getPointStatusDisplay = (status: number | string | undefined | null): string => {
+    if (status === null || status === undefined) return 'Unknown';
+    if (typeof status === 'string') return status;
+    if (typeof status === 'number') {
+      const statusNames = ['Available', 'Occupied', 'Charging', 'Reserved', 'Faulted', 'Unavailable', 'Preparing', 'Finishing', 'Offline'];
+      return statusNames[status] || 'Unknown';
+    }
+    return 'Unknown';
   };
 
   return (
@@ -686,6 +710,7 @@ export const ChargingStationDetail: React.FC = () => {
                     <option value="2">Außer Betrieb</option>
                     <option value="3">Reserviert</option>
                     <option value="4">Nicht verfügbar</option>
+                    <option value="5">Offline</option>
                   </select>
                 </div>
               </>
@@ -694,8 +719,8 @@ export const ChargingStationDetail: React.FC = () => {
                 <div>
                   <span className="text-sm text-gray-600 dark:text-gray-400">Status</span>
                   <div className="mt-1">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${statusColors[station.status]}`}>
-                      {station.status}
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${statusColors[getStatusDisplay(station.status)]}`}>
+                      {getStatusDisplay(station.status)}
                     </span>
                   </div>
                 </div>
@@ -1008,8 +1033,8 @@ export const ChargingStationDetail: React.FC = () => {
                             Externe ID: <span className="font-mono text-gray-900 dark:text-gray-100">{point.evseIdExternal}</span>
                           </span>
                         )}
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[point.status]}`}>
-                          {point.status}
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusColors[getPointStatusDisplay(point.status)]}`}>
+                          {getPointStatusDisplay(point.status)}
                         </span>
                       </div>
                     </div>

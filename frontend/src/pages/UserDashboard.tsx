@@ -364,6 +364,11 @@ export const UserDashboard: React.FC = () => {
                           </span>
                         </div>
                       </div>
+                      {session.appliedTariff && (
+                        <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                          Tarif: <span className="font-medium">{session.appliedTariff.name}</span>
+                        </div>
+                      )}
                     </div>
                     <Button
                       variant="destructive"
@@ -477,6 +482,7 @@ export const UserDashboard: React.FC = () => {
                   <TableHead>Dauer</TableHead>
                   <TableHead>Energie</TableHead>
                   <TableHead>Kosten</TableHead>
+                  <TableHead>Tarif</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Aktionen</TableHead>
                 </TableRow>
@@ -523,6 +529,9 @@ export const UserDashboard: React.FC = () => {
                     </TableCell>
                     <TableCell className="text-sm font-medium">
                       €{session.cost ? session.cost.toFixed(2) : '0.00'}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {session.appliedTariff?.name || 'Standard'}
                     </TableCell>
                     <TableCell>
                       <span className={`px-2 py-1 text-xs rounded-full ${getStatusBadge(session.status)}`}>

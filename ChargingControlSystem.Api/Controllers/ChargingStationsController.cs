@@ -95,6 +95,18 @@ public class ChargingStationsController : ControllerBase
                         m.ChargingStationGroup.Name
                     })
                     .ToList(),
+                ChargingPoints = _context.ChargingPoints
+                    .Where(cp => cp.ChargingStationId == s.Id && cp.IsActive)
+                    .Select(cp => new
+                    {
+                        cp.Id,
+                        cp.EvseId,
+                        cp.Name,
+                        Status = cp.Status.ToString(),
+                        cp.ConnectorType,
+                        cp.MaxPower
+                    })
+                    .ToList(),
                 LastHeartbeat = s.LastHeartbeat.HasValue ? DateTime.SpecifyKind(s.LastHeartbeat.Value, DateTimeKind.Utc) : (DateTime?)null,
                 s.ChargeBoxId,
                 s.OcppProtocol,
@@ -225,6 +237,46 @@ public class ChargingStationsController : ControllerBase
         return Ok(station);
     }
 
+    /// <summary>
+    /// Ladestationen ohne zugeordneten Ladepark abrufen
+    /// </summary>
+    [HttpGet("unassigned")]
+    public async Task<IActionResult> GetUnassignedStations()
+    {
+        var tenantId = HttpContext.Items["TenantId"] as Guid?;
+        if (tenantId == null)
+            return BadRequest("Tenant not found");
+
+        // Hole alle Parks des Tenants
+        var parkIds = await _context.ChargingParks
+            .Where(p => p.TenantId == tenantId.Value && p.IsActive)
+            .Select(p => p.Id)
+            .ToListAsync();
+
+        // Hole Stationen, die zu keinem Park gehören oder deren Park nicht existiert
+        var stations = await _context.ChargingStations
+            .Include(s => s.ChargingPark)
+            .Where(s => s.IsActive && 
+                (s.ChargingPark == null || 
+                 s.ChargingPark.TenantId != tenantId.Value || 
+                 !parkIds.Contains(s.ChargingParkId)))
+            .Select(s => new
+            {
+                s.Id,
+                s.StationId,
+                s.Name,
+                Status = s.Status.ToString(),
+                s.Vendor,
+                s.Model,
+                Type = s.Type.ToString(),
+                s.MaxPower,
+                s.NumberOfConnectors
+            })
+            .ToListAsync();
+
+        return Ok(stations);
+    }
+
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateChargingStationDto dto)
     {
@@ -249,7 +301,7 @@ public class ChargingStationsController : ControllerBase
             Type = dto.Type,
             MaxPower = dto.MaxPower,
             NumberOfConnectors = dto.NumberOfConnectors,
-            Status = ChargingStationStatus.Available,
+            // Status wird automatisch auf Offline gesetzt (Standardwert)
             Latitude = dto.Latitude,
             Longitude = dto.Longitude,
             Notes = dto.Notes,

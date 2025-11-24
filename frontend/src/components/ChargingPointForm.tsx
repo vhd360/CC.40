@@ -186,6 +186,7 @@ export const ChargingPointForm: React.FC<ChargingPointFormProps> = ({
                   <option value="5">Nicht verfügbar</option>
                   <option value="6">Vorbereitung</option>
                   <option value="7">Abschluss</option>
+                  <option value="8">Offline</option>
                 </select>
               </div>
             </div>

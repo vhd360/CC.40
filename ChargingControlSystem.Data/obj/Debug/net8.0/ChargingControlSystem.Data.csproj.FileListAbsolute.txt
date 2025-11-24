@@ -23,3 +23,4 @@ D:\CC.40\ChargingControlSystem.Data\obj\Debug\net8.0\ChargingControlSystem.Data.
 D:\CC.40\ChargingControlSystem.Data\obj\Debug\net8.0\refint\ChargingControlSystem.Data.dll
 D:\CC.40\ChargingControlSystem.Data\obj\Debug\net8.0\ChargingControlSystem.Data.pdb
 D:\CC.40\ChargingControlSystem.Data\obj\Debug\net8.0\ref\ChargingControlSystem.Data.dll
+C:\Users\gva6397\source\repos\CC.40\ChargingControlSystem.Data\obj\Debug\net8.0\ChargingControlSystem.Data.sourcelink.json

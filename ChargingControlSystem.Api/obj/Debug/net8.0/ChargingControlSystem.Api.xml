@@ -197,6 +197,11 @@
             Ladepunkt-Status zurücksetzen (Admin)
             </summary>
         </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.ChargingParksController.AssignStations(System.Guid,ChargingControlSystem.Api.Controllers.AssignStationsDto)">
+            <summary>
+            Ladestationen einem Ladepark zuordnen
+            </summary>
+        </member>
         <member name="T:ChargingControlSystem.Api.Controllers.ChargingPointsController">
             <summary>
             Ladepunkte-Verwaltung (EVSE)
@@ -271,6 +276,11 @@
             <response code="400">Tenant nicht gefunden</response>
             <response code="404">Ladesäule nicht gefunden</response>
             <response code="401">Nicht autorisiert</response>
+        </member>
+        <member name="M:ChargingControlSystem.Api.Controllers.ChargingStationsController.GetUnassignedStations">
+            <summary>
+            Ladestationen ohne zugeordneten Ladepark abrufen
+            </summary>
         </member>
         <member name="M:ChargingControlSystem.Api.Controllers.ChargingStationsController.GetConfiguration(System.Guid)">
             <summary>

@@ -38,13 +38,16 @@ export const UserStations: React.FC = () => {
       const availability: Record<string, { hasAvailablePoints: boolean; isLoading: boolean }> = {};
       
       for (const station of data) {
-        // Station muss verfügbar sein und online (lastHeartbeat innerhalb der letzten 10 Minuten)
+        // Station ist verfügbar wenn Status "Available" ist, unabhängig von lastHeartbeat
+        // lastHeartbeat wird nur als zusätzliche Info verwendet, nicht als harte Bedingung
         const isStationOnline = station.lastHeartbeat && 
           (new Date().getTime() - new Date(station.lastHeartbeat).getTime()) < 10 * 60 * 1000;
         
-        const isStationAvailable = station.status !== 'Unavailable' && 
-                                   station.status !== 'OutOfOrder' && 
-                                   isStationOnline &&
+        // Station ist verfügbar wenn Status "Available" ist und nicht Offline/Unavailable/OutOfOrder
+        const isStationAvailable = station.status === 'Available' && 
+                                   station.status !== 'Unavailable' && 
+                                   station.status !== 'OutOfOrder' &&
+                                   station.status !== 'Offline' &&
                                    station.chargeBoxId;
         
         if (isStationAvailable) {
@@ -366,24 +369,45 @@ export const UserStations: React.FC = () => {
     }
   };
 
-  const getStatusColor = (status: string, lastHeartbeat?: string, chargeBoxId?: string) => {
-    // Prüfe, ob Station offline ist (kein lastHeartbeat oder älter als 10 Minuten)
-    const isOffline = !lastHeartbeat || 
-      (new Date().getTime() - new Date(lastHeartbeat).getTime()) >= 10 * 60 * 1000 ||
-      !chargeBoxId;
-    
-    // Wenn Station offline ist, zeige grau
-    if (isOffline) {
-      return 'bg-gray-500';
+  // Hilfsfunktion: Bestimmt den anzuzeigenden Status-Text
+  const getDisplayStatus = (status: string, lastHeartbeat?: string): string => {
+    // Wenn Status explizit gesetzt ist, verwende diesen (hat Vorrang)
+    if (status && status !== 'Unknown') {
+      return status;
     }
     
+    // Fallback: Prüfe lastHeartbeat nur wenn Status nicht explizit gesetzt ist
+    const isOffline = !lastHeartbeat || 
+      (new Date().getTime() - new Date(lastHeartbeat).getTime()) >= 10 * 60 * 1000;
+    
+    return isOffline ? 'Offline' : 'Unknown';
+  };
+
+  const getStatusColor = (status: string, lastHeartbeat?: string, chargeBoxId?: string) => {
+    // Status-Farben basierend auf dem tatsächlichen Status aus dem Payload
     const colors: Record<string, string> = {
       'Available': 'bg-green-500',
       'Occupied': 'bg-yellow-500',
       'OutOfOrder': 'bg-red-500',
       'Reserved': 'bg-blue-500',
-      'Unavailable': 'bg-gray-500'
+      'Unavailable': 'bg-gray-500',
+      'Offline': 'bg-gray-500'
     };
+    
+    // Wenn Status explizit gesetzt ist, verwende diesen
+    if (status && colors[status]) {
+      return colors[status];
+    }
+    
+    // Fallback: Prüfe lastHeartbeat nur wenn Status nicht explizit gesetzt ist
+    const isOffline = !lastHeartbeat || 
+      (new Date().getTime() - new Date(lastHeartbeat).getTime()) >= 10 * 60 * 1000 ||
+      !chargeBoxId;
+    
+    if (isOffline) {
+      return 'bg-gray-500';
+    }
+    
     return colors[status] || 'bg-gray-500';
   };
 
@@ -512,14 +536,18 @@ export const UserStations: React.FC = () => {
                 <div className="flex gap-2">
                   {(() => {
                     const isStationUnavailable = station.status === 'Unavailable' || station.status === 'OutOfOrder';
-                    const isStationOffline = !station.lastHeartbeat || 
-                      (new Date().getTime() - new Date(station.lastHeartbeat).getTime()) >= 10 * 60 * 1000;
+                    // Station ist offline nur wenn Status explizit "Offline" ist, nicht basierend auf lastHeartbeat
+                    const isStationOffline = station.status === 'Offline';
                     const hasNoChargeBoxId = !station.chargeBoxId;
                     const availability = stationAvailability[station.id];
                     const hasNoAvailablePoints = availability && !availability.hasAvailablePoints && !availability.isLoading;
                     const isLoadingAvailability = availability?.isLoading;
                     
-                    const isDisabled = isStationUnavailable || isStationOffline || hasNoChargeBoxId || hasNoAvailablePoints || isLoadingAvailability;
+                    // Prüfe auch, ob Station wirklich verbunden ist (für Button-Deaktivierung)
+                    const isNotConnected = !station.lastHeartbeat || 
+                      (new Date().getTime() - new Date(station.lastHeartbeat).getTime()) >= 10 * 60 * 1000;
+                    
+                    const isDisabled = isStationUnavailable || isStationOffline || hasNoChargeBoxId || hasNoAvailablePoints || isLoadingAvailability || (isNotConnected && station.status !== 'Available');
                     
                     let disabledTitle = '';
                     if (isStationUnavailable) {
@@ -532,6 +560,8 @@ export const UserStations: React.FC = () => {
                       disabledTitle = 'Prüfe Verfügbarkeit...';
                     } else if (hasNoAvailablePoints) {
                       disabledTitle = 'Keine verfügbaren Ladepunkte';
+                    } else if (isNotConnected && station.status !== 'Available') {
+                      disabledTitle = 'Ladestation ist nicht verbunden';
                     }
                     
                     return (
@@ -606,19 +636,17 @@ export const UserStations: React.FC = () => {
                 <SelectContent>
                   {chargingPoints.length === 0 ? (
                     <SelectItem value="none" disabled>Keine Ladepunkte vorhanden</SelectItem>
-                  ) : chargingPoints.filter((point: any) => point.isAvailable).length === 0 ? (
-                    <SelectItem value="none" disabled>Keine verfügbaren Ladepunkte</SelectItem>
                   ) : (
-                    chargingPoints
-                      .filter((point: any) => point.isAvailable)
-                      .map((point) => (
-                        <SelectItem 
-                          key={point.id} 
-                          value={point.id}
-                        >
-                          EVSE {point.evseId} - {point.pointName || `Ladepunkt ${point.evseId}`} ({point.type}, {point.maxPower}kW)
-                        </SelectItem>
-                      ))
+                    chargingPoints.map((point) => (
+                      <SelectItem 
+                        key={point.id} 
+                        value={point.id}
+                        disabled={!point.isAvailable}
+                      >
+                        EVSE {point.evseId} - {point.pointName || `Ladepunkt ${point.evseId}`} ({point.type}, {point.maxPower}kW)
+                        {!point.isAvailable && ' - Nicht verfügbar'}
+                      </SelectItem>
+                    ))
                   )}
                 </SelectContent>
               </Select>

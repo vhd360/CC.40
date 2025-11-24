@@ -1,0 +1,285 @@
+﻿using System;
+using Microsoft.EntityFrameworkCore.Migrations;
+
+#nullable disable
+
+namespace ChargingControlSystem.Data.Migrations
+{
+    /// <inheritdoc />
+    public partial class FixOfflineStatusData : Migration
+    {
+        /// <inheritdoc />
+        protected override void Up(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.UpdateData(
+                table: "BillingAccounts",
+                keyColumn: "Id",
+                keyValue: new Guid("dddd1111-1111-1111-1111-111111111111"),
+                column: "CreatedAt",
+                value: new DateTime(2025, 10, 25, 7, 9, 20, 231, DateTimeKind.Utc).AddTicks(1010));
+
+            migrationBuilder.UpdateData(
+                table: "ChargingParks",
+                keyColumn: "Id",
+                keyValue: new Guid("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                column: "CreatedAt",
+                value: new DateTime(2025, 11, 4, 7, 9, 20, 231, DateTimeKind.Utc).AddTicks(727));
+
+            migrationBuilder.UpdateData(
+                table: "ChargingParks",
+                keyColumn: "Id",
+                keyValue: new Guid("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                column: "CreatedAt",
+                value: new DateTime(2025, 11, 9, 7, 9, 20, 231, DateTimeKind.Utc).AddTicks(734));
+
+            migrationBuilder.UpdateData(
+                table: "ChargingPoints",
+                keyColumn: "Id",
+                keyValue: new Guid("88888888-8888-8888-8888-888888888888"),
+                column: "CreatedAt",
+                value: new DateTime(2025, 11, 4, 7, 9, 20, 231, DateTimeKind.Utc).AddTicks(894));
+
+            migrationBuilder.UpdateData(
+                table: "ChargingPoints",
+                keyColumn: "Id",
+                keyValue: new Guid("99999999-9999-9999-9999-999999999999"),
+                column: "CreatedAt",
+                value: new DateTime(2025, 11, 4, 7, 9, 20, 231, DateTimeKind.Utc).AddTicks(898));
+
+            migrationBuilder.UpdateData(
+                table: "ChargingStations",
+                keyColumn: "Id",
+                keyValue: new Guid("44444444-4444-4444-4444-444444444444"),
+                columns: new[] { "CreatedAt", "LastHeartbeat" },
+                values: new object[] { new DateTime(2025, 11, 4, 7, 9, 20, 231, DateTimeKind.Utc).AddTicks(789), new DateTime(2025, 11, 24, 7, 4, 20, 231, DateTimeKind.Utc).AddTicks(791) });
+
+            migrationBuilder.UpdateData(
+                table: "ChargingStations",
+                keyColumn: "Id",
+                keyValue: new Guid("55555555-5555-5555-5555-555555555555"),
+                columns: new[] { "CreatedAt", "LastHeartbeat" },
+                values: new object[] { new DateTime(2025, 11, 6, 7, 9, 20, 231, DateTimeKind.Utc).AddTicks(797), new DateTime(2025, 11, 24, 7, 6, 20, 231, DateTimeKind.Utc).AddTicks(798) });
+
+            migrationBuilder.UpdateData(
+                table: "QrCodes",
+                keyColumn: "Id",
+                keyValue: new Guid("eeee2222-2222-2222-2222-222222222222"),
+                columns: new[] { "CreatedAt", "ExpiresAt" },
+                values: new object[] { new DateTime(2025, 11, 14, 7, 9, 20, 231, DateTimeKind.Utc).AddTicks(1054), new DateTime(2026, 11, 24, 7, 9, 20, 231, DateTimeKind.Utc).AddTicks(1047) });
+
+            migrationBuilder.UpdateData(
+                table: "Tenants",
+                keyColumn: "Id",
+                keyValue: new Guid("11111111-1111-1111-1111-111111111111"),
+                column: "CreatedAt",
+                value: new DateTime(2025, 10, 25, 7, 9, 20, 231, DateTimeKind.Utc).AddTicks(521));
+
+            migrationBuilder.UpdateData(
+                table: "Tenants",
+                keyColumn: "Id",
+                keyValue: new Guid("aaaabbbb-1111-2222-3333-444444444444"),
+                column: "CreatedAt",
+                value: new DateTime(2025, 10, 30, 7, 9, 20, 231, DateTimeKind.Utc).AddTicks(537));
+
+            migrationBuilder.UpdateData(
+                table: "UserGroupMemberships",
+                keyColumn: "Id",
+                keyValue: new Guid("ccccdddd-1111-2222-3333-444444444444"),
+                column: "AssignedAt",
+                value: new DateTime(2025, 10, 25, 7, 9, 20, 231, DateTimeKind.Utc).AddTicks(669));
+
+            migrationBuilder.UpdateData(
+                table: "UserGroupMemberships",
+                keyColumn: "Id",
+                keyValue: new Guid("ccccdddd-2222-3333-4444-555555555555"),
+                column: "AssignedAt",
+                value: new DateTime(2025, 10, 30, 7, 9, 20, 231, DateTimeKind.Utc).AddTicks(675));
+
+            migrationBuilder.UpdateData(
+                table: "UserGroups",
+                keyColumn: "Id",
+                keyValue: new Guid("33333333-3333-3333-3333-333333333333"),
+                column: "CreatedAt",
+                value: new DateTime(2025, 10, 25, 7, 9, 20, 231, DateTimeKind.Utc).AddTicks(578));
+
+            migrationBuilder.UpdateData(
+                table: "UserGroups",
+                keyColumn: "Id",
+                keyValue: new Guid("aaaabbbb-3333-4444-5555-666666666666"),
+                column: "CreatedAt",
+                value: new DateTime(2025, 10, 30, 7, 9, 20, 231, DateTimeKind.Utc).AddTicks(581));
+
+            migrationBuilder.UpdateData(
+                table: "Users",
+                keyColumn: "Id",
+                keyValue: new Guid("22222222-2222-2222-2222-222222222222"),
+                columns: new[] { "CreatedAt", "LastLoginAt" },
+                values: new object[] { new DateTime(2025, 10, 25, 7, 9, 20, 231, DateTimeKind.Utc).AddTicks(630), new DateTime(2025, 11, 23, 7, 9, 20, 231, DateTimeKind.Utc).AddTicks(632) });
+
+            migrationBuilder.UpdateData(
+                table: "Users",
+                keyColumn: "Id",
+                keyValue: new Guid("aaaabbbb-2222-3333-4444-555555555555"),
+                columns: new[] { "CreatedAt", "LastLoginAt" },
+                values: new object[] { new DateTime(2025, 10, 30, 7, 9, 20, 231, DateTimeKind.Utc).AddTicks(640), new DateTime(2025, 11, 22, 7, 9, 20, 231, DateTimeKind.Utc).AddTicks(640) });
+
+            migrationBuilder.UpdateData(
+                table: "VehicleAssignments",
+                keyColumn: "Id",
+                keyValue: new Guid("cccc0000-0000-0000-0000-000000000000"),
+                column: "AssignedAt",
+                value: new DateTime(2025, 11, 17, 7, 9, 20, 231, DateTimeKind.Utc).AddTicks(972));
+
+            migrationBuilder.UpdateData(
+                table: "Vehicles",
+                keyColumn: "Id",
+                keyValue: new Guid("66666666-6666-6666-6666-666666666666"),
+                column: "CreatedAt",
+                value: new DateTime(2025, 10, 30, 7, 9, 20, 231, DateTimeKind.Utc).AddTicks(940));
+
+            migrationBuilder.UpdateData(
+                table: "Vehicles",
+                keyColumn: "Id",
+                keyValue: new Guid("77777777-7777-7777-7777-777777777777"),
+                column: "CreatedAt",
+                value: new DateTime(2025, 11, 4, 7, 9, 20, 231, DateTimeKind.Utc).AddTicks(944));
+        }
+
+        /// <inheritdoc />
+        protected override void Down(MigrationBuilder migrationBuilder)
+        {
+            migrationBuilder.UpdateData(
+                table: "BillingAccounts",
+                keyColumn: "Id",
+                keyValue: new Guid("dddd1111-1111-1111-1111-111111111111"),
+                column: "CreatedAt",
+                value: new DateTime(2025, 10, 25, 7, 4, 28, 721, DateTimeKind.Utc).AddTicks(3190));
+
+            migrationBuilder.UpdateData(
+                table: "ChargingParks",
+                keyColumn: "Id",
+                keyValue: new Guid("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                column: "CreatedAt",
+                value: new DateTime(2025, 11, 4, 7, 4, 28, 721, DateTimeKind.Utc).AddTicks(2478));
+
+            migrationBuilder.UpdateData(
+                table: "ChargingParks",
+                keyColumn: "Id",
+                keyValue: new Guid("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                column: "CreatedAt",
+                value: new DateTime(2025, 11, 9, 7, 4, 28, 721, DateTimeKind.Utc).AddTicks(2487));
+
+            migrationBuilder.UpdateData(
+                table: "ChargingPoints",
+                keyColumn: "Id",
+                keyValue: new Guid("88888888-8888-8888-8888-888888888888"),
+                column: "CreatedAt",
+                value: new DateTime(2025, 11, 4, 7, 4, 28, 721, DateTimeKind.Utc).AddTicks(3021));
+
+            migrationBuilder.UpdateData(
+                table: "ChargingPoints",
+                keyColumn: "Id",
+                keyValue: new Guid("99999999-9999-9999-9999-999999999999"),
+                column: "CreatedAt",
+                value: new DateTime(2025, 11, 4, 7, 4, 28, 721, DateTimeKind.Utc).AddTicks(3023));
+
+            migrationBuilder.UpdateData(
+                table: "ChargingStations",
+                keyColumn: "Id",
+                keyValue: new Guid("44444444-4444-4444-4444-444444444444"),
+                columns: new[] { "CreatedAt", "LastHeartbeat" },
+                values: new object[] { new DateTime(2025, 11, 4, 7, 4, 28, 721, DateTimeKind.Utc).AddTicks(2800), new DateTime(2025, 11, 24, 6, 59, 28, 721, DateTimeKind.Utc).AddTicks(2804) });
+
+            migrationBuilder.UpdateData(
+                table: "ChargingStations",
+                keyColumn: "Id",
+                keyValue: new Guid("55555555-5555-5555-5555-555555555555"),
+                columns: new[] { "CreatedAt", "LastHeartbeat" },
+                values: new object[] { new DateTime(2025, 11, 6, 7, 4, 28, 721, DateTimeKind.Utc).AddTicks(2824), new DateTime(2025, 11, 24, 7, 1, 28, 721, DateTimeKind.Utc).AddTicks(2825) });
+
+            migrationBuilder.UpdateData(
+                table: "QrCodes",
+                keyColumn: "Id",
+                keyValue: new Guid("eeee2222-2222-2222-2222-222222222222"),
+                columns: new[] { "CreatedAt", "ExpiresAt" },
+                values: new object[] { new DateTime(2025, 11, 14, 7, 4, 28, 721, DateTimeKind.Utc).AddTicks(3293), new DateTime(2026, 11, 24, 7, 4, 28, 721, DateTimeKind.Utc).AddTicks(3273) });
+
+            migrationBuilder.UpdateData(
+                table: "Tenants",
+                keyColumn: "Id",
+                keyValue: new Guid("11111111-1111-1111-1111-111111111111"),
+                column: "CreatedAt",
+                value: new DateTime(2025, 10, 25, 7, 4, 28, 721, DateTimeKind.Utc).AddTicks(1662));
+
+            migrationBuilder.UpdateData(
+                table: "Tenants",
+                keyColumn: "Id",
+                keyValue: new Guid("aaaabbbb-1111-2222-3333-444444444444"),
+                column: "CreatedAt",
+                value: new DateTime(2025, 10, 30, 7, 4, 28, 721, DateTimeKind.Utc).AddTicks(1707));
+
+            migrationBuilder.UpdateData(
+                table: "UserGroupMemberships",
+                keyColumn: "Id",
+                keyValue: new Guid("ccccdddd-1111-2222-3333-444444444444"),
+                column: "AssignedAt",
+                value: new DateTime(2025, 10, 25, 7, 4, 28, 721, DateTimeKind.Utc).AddTicks(2205));
+
+            migrationBuilder.UpdateData(
+                table: "UserGroupMemberships",
+                keyColumn: "Id",
+                keyValue: new Guid("ccccdddd-2222-3333-4444-555555555555"),
+                column: "AssignedAt",
+                value: new DateTime(2025, 10, 30, 7, 4, 28, 721, DateTimeKind.Utc).AddTicks(2220));
+
+            migrationBuilder.UpdateData(
+                table: "UserGroups",
+                keyColumn: "Id",
+                keyValue: new Guid("33333333-3333-3333-3333-333333333333"),
+                column: "CreatedAt",
+                value: new DateTime(2025, 10, 25, 7, 4, 28, 721, DateTimeKind.Utc).AddTicks(1853));
+
+            migrationBuilder.UpdateData(
+                table: "UserGroups",
+                keyColumn: "Id",
+                keyValue: new Guid("aaaabbbb-3333-4444-5555-666666666666"),
+                column: "CreatedAt",
+                value: new DateTime(2025, 10, 30, 7, 4, 28, 721, DateTimeKind.Utc).AddTicks(1866));
+
+            migrationBuilder.UpdateData(
+                table: "Users",
+                keyColumn: "Id",
+                keyValue: new Guid("22222222-2222-2222-2222-222222222222"),
+                columns: new[] { "CreatedAt", "LastLoginAt" },
+                values: new object[] { new DateTime(2025, 10, 25, 7, 4, 28, 721, DateTimeKind.Utc).AddTicks(2041), new DateTime(2025, 11, 23, 7, 4, 28, 721, DateTimeKind.Utc).AddTicks(2048) });
+
+            migrationBuilder.UpdateData(
+                table: "Users",
+                keyColumn: "Id",
+                keyValue: new Guid("aaaabbbb-2222-3333-4444-555555555555"),
+                columns: new[] { "CreatedAt", "LastLoginAt" },
+                values: new object[] { new DateTime(2025, 10, 30, 7, 4, 28, 721, DateTimeKind.Utc).AddTicks(2079), new DateTime(2025, 11, 22, 7, 4, 28, 721, DateTimeKind.Utc).AddTicks(2079) });
+
+            migrationBuilder.UpdateData(
+                table: "VehicleAssignments",
+                keyColumn: "Id",
+                keyValue: new Guid("cccc0000-0000-0000-0000-000000000000"),
+                column: "AssignedAt",
+                value: new DateTime(2025, 11, 17, 7, 4, 28, 721, DateTimeKind.Utc).AddTicks(3134));
+
+            migrationBuilder.UpdateData(
+                table: "Vehicles",
+                keyColumn: "Id",
+                keyValue: new Guid("66666666-6666-6666-6666-666666666666"),
+                column: "CreatedAt",
+                value: new DateTime(2025, 10, 30, 7, 4, 28, 721, DateTimeKind.Utc).AddTicks(3084));
+
+            migrationBuilder.UpdateData(
+                table: "Vehicles",
+                keyColumn: "Id",
+                keyValue: new Guid("77777777-7777-7777-7777-777777777777"),
+                column: "CreatedAt",
+                value: new DateTime(2025, 11, 4, 7, 4, 28, 721, DateTimeKind.Utc).AddTicks(3089));
+        }
+    }
+}

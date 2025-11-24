@@ -605,6 +605,12 @@ export const api = {
     return response.json();
   },
 
+  async getChargingPark(id: string): Promise<any> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/charging-parks/${id}`);
+    if (!response.ok) throw new Error('Failed to fetch charging park');
+    return response.json();
+  },
+
   async createChargingPark(park: any): Promise<any> {
     const response = await fetchWithAuth(`${API_BASE_URL}/charging-parks`, {
       method: 'POST',
@@ -628,6 +634,21 @@ export const api = {
       method: 'DELETE'
     });
     if (!response.ok) throw new Error('Failed to delete charging park');
+  },
+
+  async getUnassignedChargingStations(): Promise<any[]> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/charging-stations/unassigned`);
+    if (!response.ok) throw new Error('Failed to fetch unassigned charging stations');
+    return response.json();
+  },
+
+  async assignStationsToPark(parkId: string, stationIds: string[]): Promise<any> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/charging-parks/${parkId}/assign-stations`, {
+      method: 'POST',
+      body: JSON.stringify({ stationIds }),
+    });
+    if (!response.ok) throw new Error('Failed to assign stations to park');
+    return response.json();
   },
 
   // Charging Stations

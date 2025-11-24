@@ -29,3 +29,4 @@ D:\CC.40\ChargingControlSystem.OCPP\obj\Debug\net8.0\ChargingControlSystem.OCPP.
 D:\CC.40\ChargingControlSystem.OCPP\obj\Debug\net8.0\refint\ChargingControlSystem.OCPP.dll
 D:\CC.40\ChargingControlSystem.OCPP\obj\Debug\net8.0\ChargingControlSystem.OCPP.pdb
 D:\CC.40\ChargingControlSystem.OCPP\obj\Debug\net8.0\ref\ChargingControlSystem.OCPP.dll
+C:\Users\gva6397\source\repos\CC.40\ChargingControlSystem.OCPP\obj\Debug\net8.0\ChargingControlSystem.OCPP.sourcelink.json

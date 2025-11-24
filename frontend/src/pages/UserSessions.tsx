@@ -130,6 +130,7 @@ export const UserSessions: React.FC = () => {
                   <TableHead>Dauer</TableHead>
                   <TableHead>Energie</TableHead>
                   <TableHead>Kosten</TableHead>
+                  <TableHead>Tarif</TableHead>
                   <TableHead>Auth-Methode</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Aktionen</TableHead>
@@ -205,6 +206,15 @@ export const UserSessions: React.FC = () => {
                     <TableCell>
                       <div className="text-sm font-medium">
                         €{session.cost ? session.cost.toFixed(2) : '0.00'}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">
+                        {session.appliedTariff ? (
+                          <span className="font-medium">{session.appliedTariff.name}</span>
+                        ) : (
+                          <span className="text-gray-400">Standard</span>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>

@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 
 interface ChargingStationFormProps {
   station?: any;
+  chargingParkId?: string; // Optional: Wenn gesetzt, wird das Feld ausgeblendet und automatisch gesetzt
   onSubmit: (data: ChargingStationFormData) => void;
   onCancel: () => void;
 }
@@ -24,9 +25,9 @@ export interface ChargingStationFormData {
   notes?: string;
 }
 
-export const ChargingStationForm: React.FC<ChargingStationFormProps> = ({ station, onSubmit, onCancel }) => {
+export const ChargingStationForm: React.FC<ChargingStationFormProps> = ({ station, chargingParkId, onSubmit, onCancel }) => {
   const [formData, setFormData] = useState<ChargingStationFormData>({
-    chargingParkId: station?.chargingParkId || '',
+    chargingParkId: chargingParkId || station?.chargingParkId || '',
     stationId: station?.stationId || '',
     name: station?.name || '',
     vendor: station?.vendor || '',

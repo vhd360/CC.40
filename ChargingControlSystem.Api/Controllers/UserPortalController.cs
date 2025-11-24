@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ChargingControlSystem.Data;
+using ChargingControlSystem.Data.Entities;
 using ChargingControlSystem.Api.Authorization;
 using ChargingControlSystem.Data.Enums;
 using ChargingControlSystem.Api.Services;
@@ -234,53 +235,76 @@ public class UserPortalController : ControllerBase
             .Where(s => s.UserId == userId)
             .OrderByDescending(s => s.StartedAt);
 
-        var sessions = await (limit.HasValue ? query.Take(limit.Value) : query)
-            .Select(s => new
-            {
-                s.Id,
-                s.StartedAt,
-                s.EndedAt,
-                Duration = s.EndedAt.HasValue 
-                    ? (int)(s.EndedAt.Value - s.StartedAt).TotalMinutes 
-                    : (int)(DateTime.UtcNow - s.StartedAt).TotalMinutes,
-                s.EnergyDelivered,
-                s.Cost,
-                Status = s.Status.ToString(),
-                Vehicle = s.Vehicle != null ? new
-                {
-                    s.Vehicle.Id,
-                    Make = s.Vehicle.Make,
-                    Model = s.Vehicle.Model,
-                    LicensePlate = s.Vehicle.LicensePlate
-                } : null,
-                Station = new
-                {
-                    s.ChargingPoint.ChargingStation.Id,
-                    s.ChargingPoint.ChargingStation.Name,
-                    s.ChargingPoint.ChargingStation.StationId,
-                    ChargingPark = new
-                    {
-                        s.ChargingPoint.ChargingStation.ChargingPark.Name,
-                        s.ChargingPoint.ChargingStation.ChargingPark.Address,
-                        s.ChargingPoint.ChargingStation.ChargingPark.City
-                    }
-                },
-                ChargingPoint = new
-                {
-                    s.ChargingPoint.Id,
-                    s.ChargingPoint.EvseId,
-                    s.ChargingPoint.Name,
-                    Type = s.ChargingPoint.ConnectorType
-                },
-                AuthorizationMethod = s.AuthorizationMethod != null ? new
-                {
-                    s.AuthorizationMethod.Id,
-                    Type = s.AuthorizationMethod.Type.ToString(),
-                    s.AuthorizationMethod.FriendlyName,
-                    s.AuthorizationMethod.Identifier
-                } : null
-            })
+        var sessionsList = await (limit.HasValue ? query.Take(limit.Value) : query)
             .ToListAsync();
+
+        // Get tariffs for all sessions
+        var sessionsWithTariffs = new List<object>();
+        foreach (var session in sessionsList)
+        {
+            Tariff? appliedTariff = null;
+            if (session.UserId.HasValue && session.ChargingPoint?.ChargingStation != null)
+            {
+                appliedTariff = await _tariffService.GetApplicableTariffAsync(
+                    session.UserId.Value, 
+                    session.ChargingPoint.ChargingStation.Id);
+            }
+
+            sessionsWithTariffs.Add(new
+            {
+                session.Id,
+                session.StartedAt,
+                session.EndedAt,
+                Duration = session.EndedAt.HasValue 
+                    ? (int)(session.EndedAt.Value - session.StartedAt).TotalMinutes 
+                    : (int)(DateTime.UtcNow - session.StartedAt).TotalMinutes,
+                session.EnergyDelivered,
+                session.Cost,
+                Status = session.Status.ToString(),
+                Vehicle = session.Vehicle != null ? new
+                {
+                    session.Vehicle.Id,
+                    Make = session.Vehicle.Make,
+                    Model = session.Vehicle.Model,
+                    LicensePlate = session.Vehicle.LicensePlate
+                } : null,
+                Station = session.ChargingPoint?.ChargingStation != null ? new
+                {
+                    session.ChargingPoint.ChargingStation.Id,
+                    session.ChargingPoint.ChargingStation.Name,
+                    session.ChargingPoint.ChargingStation.StationId,
+                    ChargingPark = session.ChargingPoint.ChargingStation.ChargingPark != null ? new
+                    {
+                        session.ChargingPoint.ChargingStation.ChargingPark.Name,
+                        session.ChargingPoint.ChargingStation.ChargingPark.Address,
+                        session.ChargingPoint.ChargingStation.ChargingPark.City
+                    } : null
+                } : null,
+                ChargingPoint = session.ChargingPoint != null ? new
+                {
+                    session.ChargingPoint.Id,
+                    session.ChargingPoint.EvseId,
+                    session.ChargingPoint.Name,
+                    Type = session.ChargingPoint.ConnectorType
+                } : null,
+                AuthorizationMethod = session.AuthorizationMethod != null ? new
+                {
+                    session.AuthorizationMethod.Id,
+                    Type = session.AuthorizationMethod.Type.ToString(),
+                    session.AuthorizationMethod.FriendlyName,
+                    session.AuthorizationMethod.Identifier
+                } : null,
+                AppliedTariff = appliedTariff != null ? new
+                {
+                    appliedTariff.Id,
+                    appliedTariff.Name,
+                    appliedTariff.Description,
+                    appliedTariff.Currency
+                } : null
+            });
+        }
+
+        var sessions = sessionsWithTariffs;
 
         return Ok(sessions);
     }

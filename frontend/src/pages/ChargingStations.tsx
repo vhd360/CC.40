@@ -74,9 +74,11 @@ export const ChargingStations: React.FC = () => {
     try {
       setLoading(true);
       const data = await api.getChargingStations();
-      setStations(data);
+      // Ensure data is an array and filter out any invalid entries
+      setStations(Array.isArray(data) ? data.filter(s => s != null) : []);
     } catch (error) {
       console.error('Failed to load charging stations:', error);
+      setStations([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
@@ -155,6 +157,33 @@ export const ChargingStations: React.FC = () => {
     'Reserved': 'bg-blue-500',
     'Unavailable': 'bg-gray-500',
     'Offline': 'bg-gray-400'
+  };
+
+  const chargingPointStatusColors: Record<string, string> = {
+    'Available': 'bg-green-500',
+    'Occupied': 'bg-yellow-500',
+    'Charging': 'bg-blue-500',
+    'Reserved': 'bg-purple-500',
+    'Faulted': 'bg-red-500',
+    'Unavailable': 'bg-gray-500',
+    'Preparing': 'bg-orange-500',
+    'Finishing': 'bg-indigo-500',
+    'Offline': 'bg-gray-400'
+  };
+
+  const getChargingPointStatusDisplay = (status: string): string => {
+    const statusMap: Record<string, string> = {
+      'Available': 'Verfügbar',
+      'Occupied': 'Belegt',
+      'Charging': 'Lädt',
+      'Reserved': 'Reserviert',
+      'Faulted': 'Fehler',
+      'Unavailable': 'Nicht verfügbar',
+      'Preparing': 'Vorbereitung',
+      'Finishing': 'Beendet',
+      'Offline': 'Offline'
+    };
+    return statusMap[status] || status;
   };
 
   // Hilfsfunktion: Prüft ob Station online ist (Heartbeat innerhalb der letzten 10 Minuten)
@@ -358,18 +387,22 @@ export const ChargingStations: React.FC = () => {
         </div>
       ) : stations.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {stations.map((station) => (
+          {stations.map((station) => {
+            // Skip invalid stations
+            if (!station || !station.id) return null;
+            
+            return (
             <Card key={station.id} className="hover:shadow-lg transition-shadow">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">{station.name}</CardTitle>
+                  <CardTitle className="text-lg">{station.name || 'Unbekannt'}</CardTitle>
                   <div className="flex items-center space-x-2">
                     <div className={`w-3 h-3 rounded-full ${statusColors[getDisplayStatus(station)] || 'bg-gray-500'}`} />
                     <span className="text-xs text-gray-500 dark:text-gray-400">{getDisplayStatus(station)}</span>
                   </div>
                 </div>
                 <CardDescription className="text-sm">
-                  ID: {station.stationId}
+                  ID: {station.stationId || 'N/A'}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -390,12 +423,14 @@ export const ChargingStations: React.FC = () => {
                 )}
 
                 {/* Ladepark Info */}
-                <div className="flex items-center space-x-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded">
-                  <Building2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                  <div className="text-sm">
-                    <span className="font-medium dark:text-gray-200">{station.chargingPark.name}</span>
+                {station.chargingPark && (
+                  <div className="flex items-center space-x-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded">
+                    <Building2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    <div className="text-sm">
+                      <span className="font-medium dark:text-gray-200">{station.chargingPark.name || 'Unbekannt'}</span>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Ladepunkt-Gruppen */}
                 {station.groups && station.groups.length > 0 && (
@@ -415,22 +450,56 @@ export const ChargingStations: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex items-center space-x-2">
                     <Battery className="h-4 w-4 text-blue-500" />
-                    <span className="text-sm">{station.maxPower}kW</span>
+                    <span className="text-sm">{station.maxPower || 0}kW</span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Clock className="h-4 w-4 text-green-500" />
-                    <span className="text-sm">{station.numberOfConnectors} Stecker</span>
+                    <span className="text-sm">{station.numberOfConnectors || 0} Stecker</span>
                   </div>
                 </div>
+
+                {/* Ladepunkte Status */}
+                {station.chargingPoints && station.chargingPoints.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+                      Ladepunkte:
+                    </div>
+                    <div className="space-y-1">
+                      {station.chargingPoints.map((point: any) => (
+                        <div 
+                          key={point.id} 
+                          className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded text-xs"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <div className={`w-2 h-2 rounded-full ${chargingPointStatusColors[point.status] || 'bg-gray-500'}`} />
+                            <span className="font-medium dark:text-gray-200">
+                              {point.name || `EVSE ${point.evseId}`}
+                            </span>
+                            {point.connectorType && (
+                              <span className="text-gray-500 dark:text-gray-400">
+                                ({point.connectorType})
+                              </span>
+                            )}
+                          </div>
+                          <span className={`px-2 py-0.5 rounded text-xs ${
+                            chargingPointStatusColors[point.status] || 'bg-gray-500'
+                          } text-white`}>
+                            {getChargingPointStatusDisplay(point.status)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="text-gray-600 dark:text-gray-400">Hersteller:</span>
-                    <div className="font-medium dark:text-gray-200">{station.vendor}</div>
+                    <div className="font-medium dark:text-gray-200">{station.vendor || 'N/A'}</div>
                   </div>
                   <div>
                     <span className="text-gray-600 dark:text-gray-400">Typ:</span>
-                    <div className="font-medium dark:text-gray-200">{station.type}</div>
+                    <div className="font-medium dark:text-gray-200">{station.type || 'N/A'}</div>
                   </div>
                 </div>
 
@@ -464,7 +533,7 @@ export const ChargingStations: React.FC = () => {
                   <Button 
                     variant="outline" 
                     size="sm"
-                    onClick={() => handleDeleteClick(station.id, station.name)}
+                    onClick={() => handleDeleteClick(station.id, station.name || 'Unbekannt')}
                     className="text-red-600 hover:text-red-700 hover:bg-red-50"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -472,7 +541,8 @@ export const ChargingStations: React.FC = () => {
                 </div>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <Card>

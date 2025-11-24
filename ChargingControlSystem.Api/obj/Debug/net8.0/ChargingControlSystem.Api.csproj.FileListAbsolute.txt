@@ -407,3 +407,4 @@ D:\CC.40\ChargingControlSystem.Api\obj\Debug\net8.0\ChargingControlSystem.Api.xm
 D:\CC.40\ChargingControlSystem.Api\obj\Debug\net8.0\ChargingControlSystem.Api.pdb
 D:\CC.40\ChargingControlSystem.Api\obj\Debug\net8.0\ChargingControlSystem.Api.genruntimeconfig.cache
 D:\CC.40\ChargingControlSystem.Api\obj\Debug\net8.0\ref\ChargingControlSystem.Api.dll
+C:\Users\gva6397\source\repos\CC.40\ChargingControlSystem.Api\obj\Debug\net8.0\ChargingControlSystem.Api.sourcelink.json

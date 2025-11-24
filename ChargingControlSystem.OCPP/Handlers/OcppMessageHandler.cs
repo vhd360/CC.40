@@ -512,9 +512,15 @@ public class OcppMessageHandler : IOcppMessageHandler
         using var context = await _contextFactory.CreateDbContextAsync();
 
         // Check if the IdTag (RFID) exists in authorization methods
+        // Some charging stations may strip the "WEB_" prefix from the IdTag, so we need to search for both variants
         var authMethod = await context.AuthorizationMethods
             .Include(a => a.User)
-            .FirstOrDefaultAsync(a => a.Identifier == request.IdTag && a.Type == AuthorizationMethodType.RFID && a.IsActive);
+            .FirstOrDefaultAsync(a => 
+                (a.Identifier == request.IdTag || 
+                 a.Identifier == $"WEB_{request.IdTag}" ||
+                 (a.Identifier.StartsWith("WEB_") && a.Identifier.Length > 4 && a.Identifier.Substring(4) == request.IdTag)) &&
+                a.Type == AuthorizationMethodType.RFID && 
+                a.IsActive);
 
         if (authMethod == null || !authMethod.User.IsActive)
         {
@@ -540,6 +546,9 @@ public class OcppMessageHandler : IOcppMessageHandler
 
     private async Task<StartTransactionResponse> HandleStartTransactionAsync(string chargeBoxId, StartTransactionRequest request)
     {
+        _logger.LogInformation("HandleStartTransactionAsync: ChargeBoxId={ChargeBoxId}, ConnectorId={ConnectorId}, IdTag={IdTag}", 
+            chargeBoxId, request.ConnectorId, request.IdTag);
+        
         using var context = await _contextFactory.CreateDbContextAsync();
 
         // Find station with charging points
@@ -557,36 +566,152 @@ public class OcppMessageHandler : IOcppMessageHandler
             };
         }
 
+        // Find charging point first to check for existing session
+        var chargingPoint = station.ChargingPoints.FirstOrDefault(cp => cp.EvseId == request.ConnectorId);
+        
+        // Check if there's already a session for this charging point (from Web-UI RemoteStart)
+        // This allows us to accept StartTransaction even if authorization fails, if a session already exists
+        ChargingSession? existingSessionEarly = null;
+        if (chargingPoint != null)
+        {
+            _logger.LogInformation("Looking for existing session for ChargingPointId={ChargingPointId}, EvseId={EvseId}", 
+                chargingPoint.Id, chargingPoint.EvseId);
+            
+            existingSessionEarly = await context.ChargingSessions
+                .Include(s => s.AuthorizationMethod)
+                .FirstOrDefaultAsync(s => 
+                    s.ChargingPointId == chargingPoint.Id && 
+                    s.Status == ChargingSessionStatus.Charging &&
+                    s.OcppTransactionId == null);
+            
+            if (existingSessionEarly != null)
+            {
+                _logger.LogInformation("Found existing session {SessionId} for ChargingPointId={ChargingPointId}", 
+                    existingSessionEarly.Id, chargingPoint.Id);
+            }
+            else
+            {
+                _logger.LogWarning("No existing session found for ChargingPointId={ChargingPointId}, EvseId={EvseId}. Checking all sessions for this point...", 
+                    chargingPoint.Id, chargingPoint.EvseId);
+                
+                // Debug: List all sessions for this charging point
+                var allSessions = await context.ChargingSessions
+                    .Where(s => s.ChargingPointId == chargingPoint.Id)
+                    .Select(s => new { s.Id, s.Status, s.OcppTransactionId, s.StartedAt })
+                    .ToListAsync();
+                _logger.LogWarning("All sessions for ChargingPointId={ChargingPointId}: {Sessions}", 
+                    chargingPoint.Id, string.Join(", ", allSessions.Select(s => $"Id={s.Id}, Status={s.Status}, OcppTransactionId={s.OcppTransactionId}")));
+            }
+        }
+        else
+        {
+            _logger.LogWarning("ChargingPoint not found for ConnectorId={ConnectorId} on station {StationId}", 
+                request.ConnectorId, station.Id);
+        }
+        
         // Find authorization method
+        // Some charging stations may strip the "WEB_" prefix from the IdTag, so we need to search for both variants
         var authMethod = await context.AuthorizationMethods
             .Include(a => a.User)
-            .FirstOrDefaultAsync(a => a.Identifier == request.IdTag && a.Type == AuthorizationMethodType.RFID);
+            .FirstOrDefaultAsync(a => 
+                (a.Identifier == request.IdTag || 
+                 a.Identifier == $"WEB_{request.IdTag}" ||
+                 (a.Identifier.StartsWith("WEB_") && a.Identifier.Length > 4 && a.Identifier.Substring(4) == request.IdTag)) &&
+                a.Type == AuthorizationMethodType.RFID &&
+                a.IsActive);
 
-        if (authMethod == null || !authMethod.IsActive)
+        // If authorization fails but we have an existing session, accept it anyway
+        if (authMethod == null)
         {
-            _logger.LogWarning("Authorization method not found: {IdTag}", request.IdTag);
-            return new StartTransactionResponse
+            if (existingSessionEarly != null)
             {
-                IdTagInfo = new IdTagInfo { Status = AuthorizationStatus.Invalid },
-                TransactionId = 0
-            };
+                _logger.LogWarning("Authorization method not found for IdTag: {IdTag}, but existing session {SessionId} found. Accepting StartTransaction.", 
+                    request.IdTag, existingSessionEarly.Id);
+                // Use the authorization method from the existing session
+                if (existingSessionEarly.AuthorizationMethod != null)
+                {
+                    authMethod = existingSessionEarly.AuthorizationMethod;
+                }
+                else
+                {
+                    _logger.LogWarning("Existing session {SessionId} has no AuthorizationMethod, cannot proceed", existingSessionEarly.Id);
+                    return new StartTransactionResponse
+                    {
+                        IdTagInfo = new IdTagInfo { Status = AuthorizationStatus.Invalid },
+                        TransactionId = 0
+                    };
+                }
+            }
+            else
+            {
+                _logger.LogWarning("Authorization method not found for IdTag: {IdTag}. Searched for exact match, WEB_{IdTag}, and WEB_*{IdTag}", 
+                    request.IdTag);
+                
+                // Debug: List all authorization methods for this IdTag pattern
+                var allAuthMethods = await context.AuthorizationMethods
+                    .Where(a => a.Type == AuthorizationMethodType.RFID)
+                    .Select(a => a.Identifier)
+                    .ToListAsync();
+                _logger.LogWarning("Available RFID authorization methods: {Methods}", string.Join(", ", allAuthMethods));
+                
+                return new StartTransactionResponse
+                {
+                    IdTagInfo = new IdTagInfo { Status = AuthorizationStatus.Invalid },
+                    TransactionId = 0
+                };
+            }
         }
+        
+        if (authMethod.User == null || !authMethod.User.IsActive)
+        {
+            // If we have an existing session, accept it anyway
+            if (existingSessionEarly != null)
+            {
+                _logger.LogWarning("User not active for IdTag: {IdTag}, but existing session {SessionId} found. Accepting StartTransaction.", 
+                    request.IdTag, existingSessionEarly.Id);
+            }
+            else
+            {
+                _logger.LogWarning("User not found or inactive for IdTag: {IdTag}, UserId: {UserId}", 
+                    request.IdTag, authMethod.UserId);
+                return new StartTransactionResponse
+                {
+                    IdTagInfo = new IdTagInfo { Status = AuthorizationStatus.Invalid },
+                    TransactionId = 0
+                };
+            }
+        }
+        
+        _logger.LogInformation("Authorization method found: IdTag={IdTag}, StoredIdentifier={StoredIdentifier}, UserId={UserId}", 
+            request.IdTag, authMethod.Identifier, authMethod.UserId);
 
         // Check if user has access to this station via UserGroup permissions
-        var hasAccess = await CheckUserStationAccessAsync(context, authMethod.UserId, station.Id);
-        if (!hasAccess)
+        // If we have an existing session, skip this check (session was already authorized)
+        if (existingSessionEarly == null)
         {
-            _logger.LogWarning("User {UserId} has no access to station {StationId} via user groups", 
-                authMethod.UserId, station.Id);
-            return new StartTransactionResponse
+            var hasAccess = await CheckUserStationAccessAsync(context, authMethod.UserId, station.Id);
+            if (!hasAccess)
             {
-                IdTagInfo = new IdTagInfo { Status = AuthorizationStatus.Blocked },
-                TransactionId = 0
-            };
+                _logger.LogWarning("User {UserId} has no access to station {StationId} via user groups", 
+                    authMethod.UserId, station.Id);
+                return new StartTransactionResponse
+                {
+                    IdTagInfo = new IdTagInfo { Status = AuthorizationStatus.Blocked },
+                    TransactionId = 0
+                };
+            }
+        }
+        else
+        {
+            _logger.LogInformation("Skipping user access check for existing session {SessionId}", existingSessionEarly.Id);
         }
 
-        // Find charging point by OCPP connector ID (which maps to EvseId)
-        var chargingPoint = station.ChargingPoints.FirstOrDefault(cp => cp.EvseId == request.ConnectorId);
+        // Use charging point found earlier, or find it now if not found
+        if (chargingPoint == null)
+        {
+            chargingPoint = station.ChargingPoints.FirstOrDefault(cp => cp.EvseId == request.ConnectorId);
+        }
+        
         if (chargingPoint == null)
         {
             _logger.LogWarning("ChargingPoint with EvseId {ConnectorId} not found on station {StationId}", 
@@ -599,7 +724,10 @@ public class OcppMessageHandler : IOcppMessageHandler
         }
 
         // Check if charging point is available (ChargingPoint is now the connector)
-        if (chargingPoint.Status != ChargingPointStatus.Available && chargingPoint.Status != ChargingPointStatus.Occupied)
+        // Accept Preparing, Available, and Occupied statuses - Preparing is valid during startup
+        if (chargingPoint.Status != ChargingPointStatus.Available && 
+            chargingPoint.Status != ChargingPointStatus.Occupied &&
+            chargingPoint.Status != ChargingPointStatus.Preparing)
         {
             _logger.LogWarning("ChargingPoint {ChargingPointId} (EvseId: {EvseId}) is not available (Status: {Status})", 
                 chargingPoint.Id, chargingPoint.EvseId, chargingPoint.Status);
@@ -609,6 +737,9 @@ public class OcppMessageHandler : IOcppMessageHandler
                 TransactionId = 0
             };
         }
+        
+        _logger.LogInformation("ChargingPoint {ChargingPointId} (EvseId: {EvseId}) status is {Status}, accepting StartTransaction", 
+            chargingPoint.Id, chargingPoint.EvseId, chargingPoint.Status);
 
         // Get tenant ID from charging park
         var park = await context.ChargingParks.FindAsync(station.ChargingParkId);
@@ -626,13 +757,26 @@ public class OcppMessageHandler : IOcppMessageHandler
         var random = new Random();
         var ocppTransactionId = random.Next(1, int.MaxValue);
 
-        // Check if there's already a session for this charging point (from Web-UI RemoteStart)
-        var existingSession = await context.ChargingSessions
-            .FirstOrDefaultAsync(s => 
-                s.ChargingPointId == chargingPoint.Id && 
-                s.Status == ChargingSessionStatus.Charging &&
-                s.AuthorizationMethodId == authMethod.Id &&
-                s.OcppTransactionId == null);
+        // Use existing session found earlier, or check again with the generated transaction ID
+        ChargingSession? existingSession = existingSessionEarly;
+        
+        // If we didn't find a session earlier, try to find by transaction ID
+        if (existingSession == null && ocppTransactionId > 0)
+        {
+            existingSession = await context.ChargingSessions
+                .FirstOrDefaultAsync(s => s.OcppTransactionId == ocppTransactionId);
+        }
+        
+        // Fallback: Find by charging point and status if no transaction ID match
+        if (existingSession == null && chargingPoint != null)
+        {
+            existingSession = await context.ChargingSessions
+                .FirstOrDefaultAsync(s => 
+                    s.ChargingPointId == chargingPoint.Id && 
+                    s.Status == ChargingSessionStatus.Charging &&
+                    s.AuthorizationMethodId == authMethod.Id &&
+                    s.OcppTransactionId == null);
+        }
 
         ChargingSession session;
         
@@ -689,6 +833,7 @@ public class OcppMessageHandler : IOcppMessageHandler
         var session = await context.ChargingSessions
             .Include(s => s.ChargingPoint)
                 .ThenInclude(cp => cp.ChargingStation)
+                    .ThenInclude(cs => cs.ChargingPark)
             .FirstOrDefaultAsync(s => s.OcppTransactionId == request.TransactionId);
 
         if (session == null)
@@ -700,6 +845,9 @@ public class OcppMessageHandler : IOcppMessageHandler
             };
         }
 
+        var chargingPoint = session.ChargingPoint;
+        var tenantId = session.TenantId;
+
         // Update session
         session.ChargingCompletedAt = request.Timestamp; // Zeitpunkt der Energielieferung-Ende
         session.EndedAt = request.Timestamp; // Zunächst gleichgesetzt, wird später aktualisiert wenn Stecker gezogen
@@ -710,10 +858,27 @@ public class OcppMessageHandler : IOcppMessageHandler
         // Calculate cost using tariff system (berücksichtigt jetzt ChargingCompletedAt für Standzeit)
         session.Cost = await CalculateSessionCostAsync(context, session);
 
+        // Update charging point status to Available
+        if (chargingPoint != null)
+        {
+            chargingPoint.Status = ChargingPointStatus.Available;
+            chargingPoint.LastStatusChange = DateTime.UtcNow;
+        }
+
         await context.SaveChangesAsync();
 
         _logger.LogInformation("Transaction stopped: SessionId={SessionId}, Energy={Energy}kWh, Cost={Cost}EUR", 
             session.Id, session.EnergyDelivered, session.Cost);
+
+        // Send SignalR notifications
+        if (session.UserId.HasValue && chargingPoint != null)
+        {
+            // Notify session update
+            await NotifySessionUpdateAsync(tenantId, session.UserId.Value, session.Id, "Completed", "Ladevorgang beendet");
+            
+            // Notify connector status change
+            await NotifyConnectorStatusChangedAsync(tenantId, chargingPoint.Id, "Available", "Ladepunkt wieder verfügbar");
+        }
 
         // Create billing transaction automatically (only if not already created by Web-UI stop)
         var existingTransaction = await context.BillingTransactions
@@ -738,29 +903,93 @@ public class OcppMessageHandler : IOcppMessageHandler
     {
         using var context = await _contextFactory.CreateDbContextAsync();
 
+        ChargingSession? session = null;
+
         if (request.TransactionId.HasValue)
         {
-            var session = await context.ChargingSessions
+            // Try to find session by OCPP Transaction ID
+            session = await context.ChargingSessions
+                .Include(s => s.ChargingPoint)
+                    .ThenInclude(cp => cp.ChargingStation)
                 .FirstOrDefaultAsync(s => s.OcppTransactionId == request.TransactionId.Value);
+        }
 
-            if (session != null && request.MeterValue.Any())
+        // Fallback: If no session found by TransactionId, try to find active session for this connector
+        if (session == null && request.ConnectorId > 0)
+        {
+            var station = await context.ChargingStations
+                .FirstOrDefaultAsync(s => s.ChargeBoxId == chargeBoxId);
+            
+            if (station != null)
             {
-                // Update current meter value (take first meter reading)
-                var firstMeterValue = request.MeterValue.First();
-                var energySample = firstMeterValue.SampledValue.FirstOrDefault(s => 
-                    s.Measurand == "Energy.Active.Import.Register" || string.IsNullOrEmpty(s.Measurand));
-
-                if (energySample != null && double.TryParse(energySample.Value, out var meterValue))
+                var chargingPoint = await context.ChargingPoints
+                    .FirstOrDefaultAsync(cp => cp.ChargingStationId == station.Id && cp.EvseId == request.ConnectorId);
+                
+                if (chargingPoint != null)
                 {
-                    var energyConsumed = (decimal)(meterValue / 1000.0); // Convert to kWh
-                    session.EnergyDelivered = energyConsumed;
+                    // Find active charging session for this charging point
+                    session = await context.ChargingSessions
+                        .Where(s => s.ChargingPointId == chargingPoint.Id && 
+                                   s.Status == ChargingSessionStatus.Charging)
+                        .OrderByDescending(s => s.StartedAt)
+                        .FirstOrDefaultAsync();
                     
-                    // Update cost based on current energy consumed
-                    session.Cost = await CalculateSessionCostAsync(context, session);
-                    
-                    await context.SaveChangesAsync();
+                    // If we found a session but it has no OcppTransactionId, and MeterValues has a TransactionId > 0,
+                    // update the session with the TransactionId from MeterValues
+                    // This handles the case where StartTransaction was rejected but charging started anyway
+                    if (session != null && !session.OcppTransactionId.HasValue && 
+                        request.TransactionId.HasValue && request.TransactionId.Value > 0)
+                    {
+                        session.OcppTransactionId = request.TransactionId.Value;
+                        await context.SaveChangesAsync();
+                        _logger.LogInformation("Updated session {SessionId} with OcppTransactionId {TransactionId} from MeterValues (StartTransaction was likely rejected)", 
+                            session.Id, request.TransactionId.Value);
+                    }
+                    else if (session != null && !session.OcppTransactionId.HasValue && 
+                             (!request.TransactionId.HasValue || request.TransactionId.Value == 0))
+                    {
+                        // MeterValues has TransactionId 0 or null - this means StartTransaction was rejected
+                        // We can't update the session with a TransactionId, but we can still track energy
+                        _logger.LogWarning("Session {SessionId} found but MeterValues has TransactionId 0. StartTransaction was likely rejected. Cannot update OcppTransactionId.", 
+                            session.Id);
+                    }
                 }
             }
+        }
+
+        if (session != null && request.MeterValue.Any())
+        {
+            // Update current meter value (take first meter reading)
+            var firstMeterValue = request.MeterValue.First();
+            var energySample = firstMeterValue.SampledValue.FirstOrDefault(s => 
+                s.Measurand == "Energy.Active.Import.Register" || 
+                s.Measurand == "Energy.Active.Import.Interval" ||
+                string.IsNullOrEmpty(s.Measurand));
+
+            if (energySample != null && double.TryParse(energySample.Value, out var meterValue))
+            {
+                var energyConsumed = (decimal)(meterValue / 1000.0); // Convert Wh to kWh
+                session.EnergyDelivered = energyConsumed;
+                
+                // Update cost based on current energy consumed
+                session.Cost = await CalculateSessionCostAsync(context, session);
+                
+                await context.SaveChangesAsync();
+                
+                _logger.LogInformation("Updated EnergyDelivered for session {SessionId} (TransactionId: {TransactionId}, ConnectorId: {ConnectorId}): {Energy}kWh", 
+                    session.Id, request.TransactionId, request.ConnectorId, energyConsumed);
+            }
+            else
+            {
+                _logger.LogWarning("MeterValues received but no valid energy sample found. TransactionId: {TransactionId}, ConnectorId: {ConnectorId}, MeterValues: {MeterValues}", 
+                    request.TransactionId, request.ConnectorId, 
+                    string.Join(", ", firstMeterValue.SampledValue.Select(s => $"{s.Measurand}={s.Value}")));
+            }
+        }
+        else
+        {
+            _logger.LogWarning("MeterValues received but no active session found. TransactionId: {TransactionId}, ConnectorId: {ConnectorId}, ChargeBoxId: {ChargeBoxId}", 
+                request.TransactionId, request.ConnectorId, chargeBoxId);
         }
 
         _logger.LogDebug("MeterValues from {ChargeBoxId}: Connector {ConnectorId}", 
@@ -1097,6 +1326,60 @@ public class OcppMessageHandler : IOcppMessageHandler
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to send connector status notification for connector {ConnectorId}", connectorId);
+            // Don't throw - notification should not block the OCPP response
+        }
+    }
+
+    /// <summary>
+    /// Notify clients about session update (via SignalR)
+    /// </summary>
+    private async Task NotifySessionUpdateAsync(Guid tenantId, Guid userId, Guid sessionId, string status, string? message = null)
+    {
+        if (_serviceProviderFactory == null)
+        {
+            return;
+        }
+
+        try
+        {
+            using var scope = _serviceProviderFactory().CreateScope();
+            
+            // Use reflection to get INotificationService to avoid hard dependency on Api project
+            var notificationServiceType = Type.GetType("ChargingControlSystem.Api.Services.INotificationService, ChargingControlSystem.Api");
+            if (notificationServiceType == null)
+            {
+                _logger.LogWarning("INotificationService type not found, cannot send session update notification");
+                return;
+            }
+
+            var notificationService = scope.ServiceProvider.GetService(notificationServiceType);
+            if (notificationService == null)
+            {
+                _logger.LogWarning("INotificationService not found in service provider, cannot send session update notification");
+                return;
+            }
+
+            // Call NotifySessionUpdateAsync via reflection
+            var method = notificationServiceType.GetMethod("NotifySessionUpdateAsync");
+            if (method != null)
+            {
+                _logger.LogInformation("Sending SignalR session update notification: TenantId={TenantId}, UserId={UserId}, SessionId={SessionId}, Status={Status}", 
+                    tenantId, userId, sessionId, status);
+                var task = method.Invoke(notificationService, new object[] { userId, sessionId, status, message });
+                if (task is Task notifyTask && notifyTask != null)
+                {
+                    await notifyTask;
+                    _logger.LogInformation("Successfully sent SignalR session update notification for session {SessionId}, Status={Status}", sessionId, status);
+                }
+            }
+            else
+            {
+                _logger.LogWarning("NotifySessionUpdateAsync method not found, cannot send session update notification");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send session update notification for session {SessionId}", sessionId);
             // Don't throw - notification should not block the OCPP response
         }
     }

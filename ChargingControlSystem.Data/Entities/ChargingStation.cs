@@ -68,7 +68,7 @@ public class ChargingStation
     public int NumberOfConnectors { get; set; }
 
     [Required]
-    public ChargingStationStatus Status { get; set; } = ChargingStationStatus.Available;
+    public ChargingStationStatus Status { get; set; } = ChargingStationStatus.Offline;
 
     public decimal? Latitude { get; set; }
 
@@ -117,5 +117,6 @@ public enum ChargingStationStatus
     Occupied,
     OutOfOrder,
     Reserved,
-    Unavailable
+    Unavailable,
+    Offline
 }

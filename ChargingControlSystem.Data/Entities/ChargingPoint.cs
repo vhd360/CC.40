@@ -86,7 +86,7 @@ public class ChargingPoint
     /// Current status of the charging point/connector
     /// </summary>
     [Required]
-    public ChargingPointStatus Status { get; set; } = ChargingPointStatus.Available;
+    public ChargingPointStatus Status { get; set; } = ChargingPointStatus.Offline;
 
     /// <summary>
     /// Public Key for ISO 15118 Plug & Charge
@@ -178,6 +178,11 @@ public enum ChargingPointStatus
     /// <summary>
     /// Charging has finished, waiting for cable disconnect
     /// </summary>
-    Finishing
+    Finishing,
+
+    /// <summary>
+    /// Station/Point has never connected or is offline
+    /// </summary>
+    Offline
 }
 

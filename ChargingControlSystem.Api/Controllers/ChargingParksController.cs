@@ -167,6 +167,39 @@ public class ChargingParksController : ControllerBase
 
         return NoContent();
     }
+
+    /// <summary>
+    /// Ladestationen einem Ladepark zuordnen
+    /// </summary>
+    [HttpPost("{id}/assign-stations")]
+    public async Task<IActionResult> AssignStations(Guid id, [FromBody] AssignStationsDto dto)
+    {
+        var tenantId = HttpContext.Items["TenantId"] as Guid?;
+        if (tenantId == null)
+            return BadRequest("Tenant not found");
+
+        var park = await _context.ChargingParks
+            .FirstOrDefaultAsync(p => p.Id == id && p.TenantId == tenantId.Value);
+        
+        if (park == null)
+            return NotFound("Charging park not found");
+
+        var stations = await _context.ChargingStations
+            .Where(s => dto.StationIds.Contains(s.Id) && s.ChargingPark.TenantId == tenantId.Value)
+            .ToListAsync();
+
+        if (stations.Count != dto.StationIds.Count)
+            return BadRequest("Some stations were not found");
+
+        foreach (var station in stations)
+        {
+            station.ChargingParkId = id;
+        }
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new { Message = $"{stations.Count} station(s) assigned successfully" });
+    }
 }
 
 public record CreateChargingParkDto(
@@ -190,5 +223,9 @@ public record UpdateChargingParkDto(
     decimal? Latitude,
     decimal? Longitude,
     bool IsActive
+);
+
+public record AssignStationsDto(
+    List<Guid> StationIds
 );
 
